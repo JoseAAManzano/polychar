@@ -23,15 +23,18 @@ path = os.getcwd()
 os.chdir(path)
 
 #%% Read the data
-data_path = "../processed_data/"
-files = glob(data_path + '*.txt')
+train_path = "../processed_data/train/"
+val_path = "../processed_data/val/"
+test_path = "../processed_data/test"
 
-data = {}
+files = glob(train_path + '*.txt')
+
+train_data = {}
 langs = []
 for f in files:
     lang = os.path.basename(f).split('.')[0]
     langs.append(lang)
-    data[lang] = open(f, encoding='utf-8').read().strip().split('\n')
+    train_data[lang] = open(f, encoding='utf-8').read().strip().split('\n')
     
 all_letters = string.ascii_lowercase
 
@@ -55,16 +58,6 @@ lr = 0.001
 criterion = nn.CrossEntropyLoss()
 criterion_lang = nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-
-#%% Helper function
-def randomExample(p=[0.5, 0.5]):
-    lang = np.random.choice(langs, p=p)
-    word = random.choice(data[lang])
-    word = helpers.encode(word, stoi)
-    in_ = helpers.line2tensor(word[:-1], n_letters).to(device)
-    out_ = torch.LongTensor(word[1:]).to(device)
-    cat_ = torch.tensor(0 if lang == 'ESP' else 1).view(1, -1).to(device)
-    return in_, out_, cat_
 
 #%% Training loop
 def train(input_tensor, output_tensor, cat_tensor):
@@ -108,7 +101,8 @@ total_loss = 0
 t0 = datetime.now()
 
 for it in range(1, n_epochs + 1):
-    output, loss = train(*randomExample()) # Unpack to function *args
+    example = helpers.randomExample(train_data, n_letters, stoi, device, langs)
+    output, loss = train(*example) # Unpack to function *args
     total_loss += loss
     
     if it % log_every == 0:
@@ -149,7 +143,8 @@ def eval_model(input_tensor, output_tensor, cat_tensor):
 
 eval_loss = 0
 for _ in range(100):
-    eval_loss += eval_model(*randomExample())
+    example = helpers.randomExample(train_data, n_letters, stoi, device, langs)
+    eval_loss += eval_model(*example)
 
 print(eval_loss / 100)
 

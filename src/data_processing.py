@@ -6,6 +6,7 @@ Created on Thu Oct  1 15:31:40 2020
 """
 import os, unicodedata, re
 import pandas as pd
+from random import shuffle
 
 path = os.getcwd()
 os.chdir(path)
@@ -37,10 +38,34 @@ def preprocess(st):
 esp_words = [preprocess(st) for st in esp.word.values]
 eus_words = [preprocess(st) for st in eus.word.values]
 
-with open(os.path.join(target_path, 'ESP.txt'), 'w') as f:
-    for l in esp_words:
-        f.write(l+'\n')
-        
-with open(os.path.join(target_path, 'EUS.txt'), 'w') as f:
-    for l in eus_words:
-        f.write(l+'\n')
+shuffle(esp_words)
+shuffle(eus_words)
+
+esp_words = esp_words[:min(len(esp_words), len(eus_words))]
+eus_words = eus_words[:min(len(esp_words), len(eus_words))]
+
+idx1 = int(len(esp_words)*0.7)
+idx2 = int(len(esp_words)*0.85)
+
+train_esp = esp_words[:idx1]
+val_esp = esp_words[idx1:idx2]
+test_esp = esp_words[idx2:]
+
+train_eus = eus_words[:idx1]
+val_eus = eus_words[idx1:idx2]
+test_eus = eus_words[idx2:]
+
+def save(file_name, data):
+    with open(os.path.join(target_path, f"{file_name}.txt"), 'w') as f:
+        for l in data:
+            f.write(l + '\n')
+
+save('train_esp', train_esp)
+save('val_esp', val_esp)
+save('test_esp', test_esp)
+save('ESP', esp_words)
+
+save('train_eus', train_eus)
+save('val_eus', val_eus)
+save('test_eus', test_eus)
+save('EUS', eus_words)
