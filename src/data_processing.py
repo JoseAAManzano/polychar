@@ -6,7 +6,6 @@ Created on Thu Oct  1 15:31:40 2020
 """
 import os, unicodedata, re
 import pandas as pd
-import numpy as np
 
 path = os.getcwd()
 os.chdir(path)
@@ -23,12 +22,11 @@ eus.columns = cols
 esp = esp[['spelling', 'freq', 'zipf']]
 esp.columns = cols + ['zipf']
 
-eus['zipf'] = np.log10((eus.freq*10e5 + 1)/(201336 + 159))
-print(max(esp.zipf), min(esp.zipf))
-print(max(eus.zipf), min(eus.zipf))
+eus['len'] = eus['word'].apply(lambda x: len(x))
+esp['len'] = esp['word'].apply(lambda x: len(x))
 
-res_eus = eus[(eus.zipf >= 1) & (eus.zipf <= 3)]
-res_esp = esp[(esp.zipf >= 3) & (esp.zipf <= 5)]
+eus = eus[(eus['len'] >= 4) & (eus['len'] <= 8)]
+esp = esp[(esp['len'] >= 4) & (esp['len'] <= 8)]
 
 def preprocess(st):
     st = ''.join(c for c in unicodedata.normalize('NFD', st)
@@ -36,8 +34,8 @@ def preprocess(st):
     st = re.sub(r"[^a-zA-Z]", r"", st)
     return st.lower()
 
-esp_words = [preprocess(st) for st in res_esp.word.values]
-eus_words = [preprocess(st) for st in res_eus.word.values]
+esp_words = [preprocess(st) for st in esp.word.values]
+eus_words = [preprocess(st) for st in eus.word.values]
 
 with open(os.path.join(target_path, 'ESP.txt'), 'w') as f:
     for l in esp_words:
