@@ -25,12 +25,16 @@ class PolyChar(nn.Module):
         # Predict language class after every letter
         self.lang_pred = nn.Linear(n_hidden, 1) 
         
-    def forward(self, x, hidden):
+    def forward(self, x, hidden, apply_sig=False, apply_sfmx=False):
         in_ = x.view(1, 1, -1)
         out, hidden = self.lstm(in_, hidden)
         out1 = F.dropout(out, p=self.drop_p)
         out = self.fc(out1.view(1, -1))
         l_pred = self.lang_pred(out1)
+        if apply_sig:
+            l_pred = F.sigmoid(l_pred)
+        if apply_sfmx:
+            out = F.softmax(out)
         return out, hidden, l_pred
         
     def initHidden(self, device):
