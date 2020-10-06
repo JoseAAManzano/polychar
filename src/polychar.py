@@ -34,9 +34,9 @@ class PolyChar(nn.Module):
         if apply_sig:
             l_pred = F.sigmoid(l_pred)
         if apply_sfmx:
-            out = F.softmax(out)
+            out = F.softmax(out, dim=1)
         return out, hidden, l_pred
         
-    def initHidden(self, device):
-        return (torch.zeros(self.n_layers, 1, self.n_hidden).to(device),
-                torch.zeros(self.n_layers, 1, self.n_hidden).to(device))
+    def initHidden(self, batch_size, device):
+        return (torch.zeros(self.n_layers, batch_size, self.n_hidden).to(device),
+                torch.zeros(self.n_layers, batch_size, self.n_hidden).to(device))
