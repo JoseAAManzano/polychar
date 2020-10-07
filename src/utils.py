@@ -71,26 +71,42 @@ def set_all_seeds(seed, device):
     if device == torch.device('cuda:0'):
         torch.cuda.manual_seed_all(seed)
         
+def make_train_state(args):
+    return {
+        'learning_rate': args.learning_rate,
+        'epoch_idx': 0,
+        'train_loss': [],
+        'train_acc': [],
+        'val_loss': [],
+        'val_acc': [],
+        'test_loss': -1,
+        'test_acc': -1,
+        }
+
+def compute_accuracy(y_pred, y_target):
+    _, y_pred_idx = y_pred.max(dim=1)
+    n_correct = torch.eq(y_pred_idx, y_target).sum().item()
+    return n_correct / len(y_pred_idx) * 100
+
 #%% Helper classes
 class Vocabulary(object):
-    def __init__(self, stoi=None, add_SOS=True, add_EOS=True):
+    def __init__(self, stoi=None, SOS="<SOS>", EOS="<EOS>", PAD="<PAD>"):
+        """Supports either char or word level vocabulary"""
         if stoi is None:
             stoi = {}
         self._stoi = stoi
         self._itos = {i:s for s,i in self._stoi.items()}
         
-        self._add_SOS = add_SOS
-        self._SOS_token = "<SOS>"
-        self._add_EOS = add_EOS
-        self._EOS_token = "<EOS>"
+        self._SOS_token = SOS
+        self._EOS_token = EOS
+        self._PAD_token = PAD
         
-        self._SOS_idx = -1
-        self._EOS_idx = -99
-        
-        if self._add_SOS:
-            self._SOS_idx = self.add_token(self._SOS_token)
-        if self._add_EOS:
-            self._EOS_idx = self.add_token(self._EOS_token)
+        if self._SOS_token is not None:
+            self.SOS_idx = self.add_token(self._SOS_token)
+        if self._EOS_token is not None:
+            self.EOS_idx = self.add_token(self._EOS_token)
+        if self._PAD_token is not None:
+            self.PAD_idx = self.add_token(self._PAD_token)
             
     def to_dict(self):
         """
@@ -100,7 +116,8 @@ class Vocabulary(object):
             "stoi": self._stoi,
             "itos": self._itos,
             "SOS_token": self._SOS_token,
-            "EOS_token": self._EOS_token
+            "EOS_token": self._EOS_token,
+            "PAD_token": self._PAD_token
             }
 
     @classmethod
@@ -131,11 +148,71 @@ class Vocabulary(object):
         return self._itos[idx]
     
     def __str__(self):
-        return f"<Vocabulary(size={len(self)}>"
+        return f"<Vocabulary(size={len(self)})>"
     
     def __len__(self):
         return len(self._stoi)
+
+
+class Vectorizer(object):
+    def __init__(self, data_vocab, label_vocab):
+        self.data_vocab = data_vocab
+        self.label_vocab = label_vocab
+        
+    def vectorize(self, data, vector_len=-1):
+        indices = [self.data_vocab.SOS_idx]
+        indices.extend(self.data_vocab.token2idx(t) for t in data)
+        indices.append(self.data_vocab.EOS_idx)
     
+        # if add_SOS:
+        #     indices = [self.data_vocab._SOS_token] + indices
+        # if add_EOS:
+        #     indices = indices + [self.data_vocab._EOS_token]
+        
+        if vector_len < 0:
+            vector_len = len(indices)-1
+        
+        from_vector = torch.empty(vector_len, dtype=torch.int64)
+        from_indices = indices[:-1]
+        # Add pre-padding
+        from_vector[:-len(from_indices)] = self.data_vocab.PAD_idx
+        from_vector[-len(from_indices):] = torch.LongTensor(from_indices)
+        
+        to_vector = torch.empty(vector_len, dtype=torch.int64)
+        to_indices = indices[1:]
+        to_vector[:-len(to_indices)] = self.data_vocab.PAD_idx
+        to_vector[-len(to_indices):] = torch.LongTensor(to_indices)
+        
+        return from_vector, to_vector
+        
+    @classmethod
+    def from_df(cls, df, split="char"):
+        data_vocab = Vocabulary()
+        label_vocab = Vocabulary()
+        
+        for i, row in df.iterrows():
+            if split == "char":
+                data_vocab.add_many([c for c in row.data])
+            else:
+                data_vocab.add_many([c for c in row.data.split(split)])
+            
+            label_vocab.add_token(row.label)
+        
+        return cls(data_vocab, label_vocab)
+    
+    @classmethod
+    def from_dict(cls, contents):
+        data_vocab = Vocabulary.from_dict(contents['data_vocab'])
+        label_vocab = Vocabulary.from_dict(contents['label_vocab'])
+        return cls(data_vocab, label_vocab)
+    
+    def to_dict(self):
+        return {
+            'data_vocab': self.data_vocab.to_dict(),
+            'label_vocab': self.label_vocab.to_dict()
+            }
+        
+
 class TextDataset(Dataset):
     def __init__(self, df, vectorizer):
         self.df = df
@@ -149,6 +226,8 @@ class TextDataset(Dataset):
         
         self.test_df = self.df[self.df.split=='test']
         self.test_size = len(self.test_df)
+        
+        self._max_seq_len = max(map(len, self.df.data)) + 2 # Adding SOS/EOS
         
         self._lookup_dict = {
             "train": (self.train_df, self.train_size),
@@ -196,54 +275,13 @@ class TextDataset(Dataset):
     def __getitem__(self, index):
         row = self._target_df.iloc[index]
         
-        vector = self._vectorizer.vectorize(row.text)
+        from_vector, to_vector = self._vectorizer.vectorize(row.data,
+                                                            self._max_seq_len)
         
-        label = self._vectorizer.label_vocab.lookup_token(row.label)
+        label = self._vectorizer.label_vocab.token2idx(row.label)
         
-        return {'X': vector, 'target': label}
+        return {'X': from_vector, 'Y': to_vector, 'label': label}
     
     def get_num_batches(self, batch_size):
         return len(self) // batch_size
 
-class Vectorizer(object):
-    def __init__(self, data_vocab, label_vocab):
-        self.data_vocab = data_vocab
-        self.label_vocab = label_vocab
-        
-    def vectorize(self, data, add_SOS=True, add_EOS=True):
-        one_hot = torch.zeros(len(self.data_vocab), dtype=torch.float32)
-        if add_SOS:
-            data = [self.data_vocab._SOS_token] + data
-        if add_EOS:
-            data = data + [self.data_vocab._EOS_token]
-        for token in data:
-            one_hot[self.data_vocab.token2idx(token)] = 1
-        return one_hot
-
-    @classmethod
-    def from_df(cls, df, split="char"):
-        data_vocab = Vocabulary()
-        label_vocab = Vocabulary()
-        
-        for i, row in df.iterrows():
-            if split == "char":
-                data_vocab.add_many([c for c in row.data])
-            else:
-                data_vocab.add_many([c for c in row.data.split(split)])
-            
-            label_vocab.add_token(row.label)
-        
-        return cls(data_vocab, label_vocab)
-    
-    @classmethod
-    def from_dict(cls, contents):
-        data_vocab = Vocabulary.from_dict(contents['data_vocab'])
-        label_vocab = Vocabulary.from_dict(contents['label_vocab'])
-        return cls(data_vocab, label_vocab)
-    
-    def to_dict(self):
-        return {
-            'data_vocab': self.data_vocab.to_dict(),
-            'label_vocab': self.label_vocab.to_dict()
-            }
-        

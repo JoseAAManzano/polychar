@@ -20,13 +20,15 @@ class PolyChar(nn.Module):
             hidden_size=n_hidden,
             num_layers=n_layers,
             dropout=drop_p,
+            batch_first=True
             )
         self.fc = nn.Linear(n_hidden, n_out)
         # Predict language class after every letter
         self.lang_pred = nn.Linear(n_hidden, 1) 
         
     def forward(self, x, hidden, apply_sig=False, apply_sfmx=False):
-        in_ = x.view(1, 1, -1)
+        batch_size, seq_size, n_chars = x.shape
+        in_ = x.view(batch_size, 1, -1)
         out, hidden = self.lstm(in_, hidden)
         out1 = F.dropout(out, p=self.drop_p)
         out = self.fc(out1.view(1, -1))
