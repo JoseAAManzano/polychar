@@ -9,6 +9,7 @@ import torch
 from torch.utils.data import DataLoader
 import numpy as np
 from torch.utils.data import Dataset
+import torch.nn.functional as F
 import pandas as pd
 import json
 
@@ -77,16 +78,56 @@ def make_train_state(args):
         'epoch_idx': 0,
         'train_loss': [],
         'train_acc': [],
+        'train_lang_acc': [],
         'val_loss': [],
         'val_acc': [],
+        'val_lang_acc': [],
         'test_loss': -1,
         'test_acc': -1,
+        'test_lang_acc': -1,
         }
 
-def compute_accuracy(y_pred, y_target):
-    _, y_pred_idx = y_pred.max(dim=1)
-    n_correct = torch.eq(y_pred_idx, y_target).sum().item()
-    return n_correct / len(y_pred_idx) * 100
+def compute_lang_accuracy(y_pred, y_target):
+    preds = torch.sigmoid(y_pred)
+    n_correct = torch.eq(preds > 0.5, y_target).sum().item()
+    return n_correct / len(preds) * 100
+
+def compute_accuracy(y_pred, y_true, mask_index):
+    y_pred, y_true = normalize_sizes(y_pred, y_true)
+
+    _, y_pred_indices = y_pred.max(dim=1)
+    
+    correct_indices = torch.eq(y_pred_indices, y_true).float()
+    valid_indices = torch.ne(y_true, mask_index).float()
+    
+    n_correct = (correct_indices * valid_indices).sum().item()
+    n_valid = valid_indices.sum().item()
+
+    return n_correct / n_valid * 100
+
+def normalize_sizes(y_pred, y_true):
+    """Normalize tensor sizes
+    
+    Args:
+        y_pred (torch.Tensor): the output of the model
+            If a 3-dimensional tensor, reshapes to a matrix
+        y_true (torch.Tensor): the target predictions
+            If a matrix, reshapes to be a vector
+    """
+    if len(y_pred.size()) == 3:
+        y_pred = y_pred.contiguous().view(-1, y_pred.size(2))
+    if len(y_true.size()) == 2:
+        y_true = y_true.contiguous().view(-1)
+    return y_pred, y_true
+
+def print_state_dict(train_state):
+    print((f"Epoch: {train_state['epoch_idx'] + 1} | "
+           f"train_loss: {train_state['train_loss'][-1]} | "
+           f"val_loss: {train_state['val_loss'][-1]} | "
+           f"Curr_acc_chars: {train_state['train_acc'][-1]} | "
+           f"Curr_acc_lang: {train_state['train_lang_acc'][-1]}\n"))
+    
+
 
 #%% Helper classes
 class Vocabulary(object):
@@ -172,11 +213,11 @@ class Vectorizer(object):
         if vector_len < 0:
             vector_len = len(indices)-1
         
-        from_vector = torch.empty(vector_len, dtype=torch.int64)
+        from_vector = torch.empty(vector_len, len(self.data_vocab), dtype=torch.float32)
         from_indices = indices[:-1]
         # Add pre-padding
-        from_vector[:-len(from_indices)] = self.data_vocab.PAD_idx
-        from_vector[-len(from_indices):] = torch.LongTensor(from_indices)
+        from_vector[:-len(from_indices)] = self.onehot([self.data_vocab.PAD_idx])
+        from_vector[-len(from_indices):] = self.onehot(from_indices)
         
         to_vector = torch.empty(vector_len, dtype=torch.int64)
         to_indices = indices[1:]
@@ -184,11 +225,18 @@ class Vectorizer(object):
         to_vector[-len(to_indices):] = torch.LongTensor(to_indices)
         
         return from_vector, to_vector
+    
+    def onehot(self, indices):
+        onehot = torch.zeros(len(indices), len(self.data_vocab), dtype=torch.float32)
+        
+        for i, idx in enumerate(indices):
+            onehot[i][idx] = 1.
+        return onehot
         
     @classmethod
     def from_df(cls, df, split="char"):
         data_vocab = Vocabulary()
-        label_vocab = Vocabulary()
+        label_vocab = Vocabulary(SOS=None, EOS=None, PAD=None)
         
         for i, row in df.iterrows():
             if split == "char":
@@ -227,7 +275,7 @@ class TextDataset(Dataset):
         self.test_df = self.df[self.df.split=='test']
         self.test_size = len(self.test_df)
         
-        self._max_seq_len = max(map(len, self.df.data)) + 2 # Adding SOS/EOS
+        self._max_seq_len = max(map(len, self.df.data)) + 1 # Adding either SOS/EOS
         
         self._lookup_dict = {
             "train": (self.train_df, self.train_size),

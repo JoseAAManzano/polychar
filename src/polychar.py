@@ -14,6 +14,7 @@ class PolyChar(nn.Module):
         self.drop_p = drop_p
         self.n_hidden = n_hidden
         self.n_layers = n_layers
+        self.n_out = n_out
         
         self.lstm = nn.LSTM(
             input_size=n_in,
@@ -27,17 +28,25 @@ class PolyChar(nn.Module):
         self.lang_pred = nn.Linear(n_hidden, 1) 
         
     def forward(self, x, hidden, apply_sig=False, apply_sfmx=False):
-        batch_size, seq_size, n_chars = x.shape
-        in_ = x.view(batch_size, 1, -1)
-        out, hidden = self.lstm(in_, hidden)
-        out1 = F.dropout(out, p=self.drop_p)
-        out = self.fc(out1.view(1, -1))
-        l_pred = self.lang_pred(out1)
+        out, hidden = self.lstm(x, hidden)
+        
+        # # Reshape output
+        batch_size, seq_size, n_hidden = out.shape
+        out1 = out.contiguous().view(batch_size*seq_size, n_hidden)
+
+        chars_out = self.fc(F.dropout(out1, p=self.drop_p))
+        
+        # # Get last hidden state for prediction
+        l_pred = out[:, -1] # Shape = [batch_size, n_hidden]
+        l_pred = self.lang_pred(F.dropout(l_pred, p=self.drop_p))
+    
+        if apply_sfmx:
+            chars_out = F.softmax(chars_out, dim=1)
+            
         if apply_sig:
             l_pred = F.sigmoid(l_pred)
-        if apply_sfmx:
-            out = F.softmax(out, dim=1)
-        return out, hidden, l_pred
+        
+        return chars_out.view(batch_size, seq_size, self.n_out), l_pred, hidden
         
     def initHidden(self, batch_size, device):
         return (torch.zeros(self.n_layers, batch_size, self.n_hidden).to(device),
