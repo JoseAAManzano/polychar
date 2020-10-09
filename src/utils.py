@@ -9,7 +9,6 @@ import torch
 from torch.utils.data import DataLoader
 import numpy as np
 from torch.utils.data import Dataset
-import torch.nn.functional as F
 import pandas as pd
 import json
 
@@ -122,12 +121,13 @@ def normalize_sizes(y_pred, y_true):
 
 def print_state_dict(train_state):
     print((f"Epoch: {train_state['epoch_idx'] + 1} | "
-           f"train_loss: {train_state['train_loss'][-1]} | "
-           f"val_loss: {train_state['val_loss'][-1]} | "
-           f"Curr_acc_chars: {train_state['train_acc'][-1]} | "
-           f"Curr_acc_lang: {train_state['train_lang_acc'][-1]}\n"))
+           f"train_loss: {train_state['train_loss'][-1]:.4f} | "
+           f"val_loss: {train_state['val_loss'][-1]:.4f}\n"
+           f"train_acc_chars: {train_state['train_acc'][-1]:.2f} | "
+           f"train_acc_lang: {train_state['train_lang_acc'][-1]:.2f}\n"
+           f"val_acc_chars: {train_state['val_acc'][-1]:.2f} | "
+           f"val_acc_lang: {train_state['val_lang_acc'][-1]:.2f}\n"))
     
-
 
 #%% Helper classes
 class Vocabulary(object):
@@ -262,11 +262,20 @@ class Vectorizer(object):
         
 
 class TextDataset(Dataset):
-    def __init__(self, df, vectorizer):
+    def __init__(self, df, vectorizer, p=None):
         self.df = df
         self._vectorizer = vectorizer
         
         self.train_df = self.df[self.df.split=='train']
+        if p is not None:
+            labs = self.train_df.label.unique()
+            tmp = pd.DataFrame()
+            if isinstance(p, float):
+                p = [p, 1-p]
+            for frac, l in zip(p, labs):
+                dat = self.train_df[self.train_df.label == l]
+                tmp = pd.concat([tmp, dat.sample(frac=frac)])
+            self.train_df = tmp
         self.train_size = len(self.train_df)
         
         self.val_df = self.df[self.df.split=='val']
@@ -286,7 +295,7 @@ class TextDataset(Dataset):
         self.set_split('train')
         
         # Handles imbalanced labels
-        labels = df.label.value_counts().to_dict()
+        labels = self.train_df.label.value_counts().to_dict()
         def sort_key(item):
             return self._vectorizer.label_vocab.token2idx(item[0])
         sorted_cnts = sorted(labels.items(), key=sort_key)
@@ -294,10 +303,10 @@ class TextDataset(Dataset):
         self.label_weights = 1.0 / torch.tensor(freqs, dtype=torch.float32)
         
     @classmethod
-    def load_dataset_and_make_vectorizer(cls, csv, split="char"):
+    def load_dataset_and_make_vectorizer(cls, csv, split="char", p=None):
         df = pd.read_csv(csv)
         train_df = df[df.split=='train']
-        return cls(df, Vectorizer.from_df(train_df, split=split))
+        return cls(df, Vectorizer.from_df(train_df, split=split), p)
     
     @classmethod
     def load_dataset_and_load_vectorizer(cls, csv, vectorizer_path):
