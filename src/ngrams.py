@@ -46,12 +46,15 @@ class CharNGram(object):
                     list(word.lower()) +\
                     [self.EOS_token] * pad
     
+    def _split_word(self, word, n):
+        for i in range(len(word) - n + 1):
+            yield tuple(word[i:i+n])
+    
     def _split_and_count(self, data, n):
         cntr = self._initialize_counts(n)
         for word in data:
-            for i in range(len(word)-n+1):
-                term = tuple(word[i:i+n])
-                cntr[term] += 1
+            for ngram in self._split_word(word, n):
+                cntr[ngram] += 1
         return cntr
     
     def _initialize_counts(self, n):
@@ -74,27 +77,27 @@ class CharNGram(object):
             for n_gram, n_count in self.ngrams.items():
                 m_gram = n_gram[:-1]
                 m_count = m_grams[m_gram]
-                ret[n_gram] = (n_count + self.laplace) /\
-                    (m_count + self.laplace * vocab_size)
+                ret[n_gram] = math.log((n_count + self.laplace) /\
+                    (m_count + self.laplace * vocab_size))
             
             return ret
+        
     
     def get_single_probability(self, word, log=False):
-        word = self.process_word(word, self.n)
+        if isinstance(word, str):
+            word = self.process_word(word, self.n)
         prob = 0.0 if log else 1.0
-        for i in range(len(word)-self.n+1):
-            p = self.model[tuple(word[i:i+self.n])]
+        for ngram in self._split_word(word, self.n):
+            p = self.model[ngram]
             if log:
-                prob += math.log(p)
+                prob += p
             else:
-                prob *= p
+                prob *= math.exp(p)
         return prob
     
-    def get_distribution_from_context(self, context: Tuple[str]):
+    def get_distribution_from_context(self, context: tuple):
         pass
         
-        
-    
     def perplexity(self, test):
         test_tokens = self._preprocess(test, self.n)
         # test_ngrams = nltk.ngrams(test_tokens, self.n)
@@ -102,8 +105,7 @@ class CharNGram(object):
         
         probs = 0.0
         for word in test_tokens:
-            for i in range(len(word) - self.n + 1):
-                probs += math.log(self.model[word[i:i+self.n]])
+            probs += self.get_single_probability(word, log=True) / len(word)
         
         return math.exp((-1/N) * probs)
     
