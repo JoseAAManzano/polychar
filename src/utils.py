@@ -131,7 +131,7 @@ def print_state_dict(train_state):
 
 #%% Helper classes
 class Vocabulary(object):
-    def __init__(self, stoi=None, SOS="<SOS>", EOS="<EOS>", PAD="<PAD>"):
+    def __init__(self, stoi=None, SOS="<s>", EOS="</s>", PAD="<p>"):
         """Supports either char or word level vocabulary"""
         if stoi is None:
             stoi = {}
