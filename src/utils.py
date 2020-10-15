@@ -3,7 +3,7 @@
 Classes and functions to handle input data for PyTorch models
 
 Classes heavily inspired from Rao, D., & McMahan, B. (2019). Natural Language
-Processing with PyTorch. O'Reilly Media.
+Processing with PyTorch. O'Reilly. https://github.com/joosthub/PyTorchNLPBook
 
 Created on Thu Oct  1 17:23:28 2020
 

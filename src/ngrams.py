@@ -12,7 +12,7 @@ from itertools import product
 import pandas as pd
 
 class CharNGram(object):
-    """A character n-gram table trained on a list of words.
+    """A character n-gram model trained on a list of words.
     
     Concepts from Jurafsky, D., & Martin, J.H. (2019). Speech and Language
     Processing. Stanford Press. https://web.stanford.edu/~jurafsky/slp3/
@@ -58,9 +58,38 @@ class CharNGram(object):
         return cntr
     
     def _initialize_counts(self, n):
+        def is_plausible(permutation):
+            if self.SOS_token not in permutation or self.EOS_token not in permutation:
+                return True
+            n = len(permutation)
+            
+            if self.EOS_token in permutation[:-1]: return False
+            
+            flg = False
+            cnt = 0
+            for i in range(n-1, -1, -1):
+                if self.SOS_token == permutation[i]:
+                    flg = True
+                    cnt += 1
+                else:
+                    if flg: return False
+            if cnt == n: return False
+            
+            flg = False
+            cnt = 0
+            for i in range(n):
+                if self.EOS_token == permutation[i]:
+                    flg = True
+                    cnt += 1
+                else:
+                    if flg: return False
+            return True
+            if cnt == n : return False
+        
         cntr = Counter()
         for perm in product(self.vocab, repeat=n):
-            cntr[tuple(perm)] = 0
+            if is_plausible(perm):
+                cntr[tuple(perm)] = 0
         return cntr
     
     def _smooth(self):
@@ -68,7 +97,7 @@ class CharNGram(object):
             s = sum(self.ngrams.values())
             return Counter({key: val/s for key, val in self.ngrams.items()})
         else:
-            vocab_size = len(self.vocab)
+            vocab_size = len(self.vocab)-1
             
             ret = self.ngrams.copy()
             
@@ -95,6 +124,24 @@ class CharNGram(object):
         for ngram, value in data.split('\t'):
             model[tuple(ngram.split(' '))] = value
         return model
+    
+    def to_df(self):
+        """Do not use with >= 4-grams"""
+        idxs, cols = set(), set()
+        for k in self.model.keys():
+            idxs.add(' '.join(k[:-1]))
+            cols.add(k[-1])
+        df = pd.DataFrame(data=0.0,
+                          index=sorted(list(idxs)),
+                          columns=sorted(list(cols)))
+        for ngram, value in self.model.items():
+            cntx = ' '.join(ngram[:-1])
+            trgt = ngram[-1]
+            df.loc[cntx, trgt] = value
+        return df.fillna(0.0).drop(self.SOS_token, axis=1)
+    
+    def to_csv(self):
+        pass
     
     def get_single_probability(self, word, log=False):
         if isinstance(word, str):
@@ -140,22 +187,13 @@ class CharNGram(object):
     
     def __str__(self):
         return f"<{self.n}-gram model(size={len(self)})>"
- 
-idx1 = int(len(eng_words) * 0.80)
+    
+    
+idxs = int(len(eng_words) * 0.8)
 
-eng_train = eng_words[:idx1]
-eng_test = eng_words[idx1:]
+eng_train = eng_words[:idxs]
+eng_test = eng_words[idxs:]
 
-esp_train = esp_words[:idx1]
-esp_test = esp_words[idx1:]
+model = CharNGram(eng_train, 2)
 
-eus_train = eus_words[:idx1]
-eus_test = eus_words[idx1:]
-
-eng = CharNGram(eng_train, 4)
-# for i in range(2, 5):
-#     eng = CharNGram(eng_train, i)
-#     df = eng.to_txt(f'eng{i}.txt')
-
-print(eng.perplexity(eng_train))
-print(eng.perplexity(eng_test))
+df = model.to_df()
