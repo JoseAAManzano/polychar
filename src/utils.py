@@ -368,6 +368,9 @@ class TextDataset(Dataset):
         Args:
             df (pandas.DataFrame): the dataset
             vectorizer (Vectorizer): Vectorizer instantiated from the dataset
+            p (List[float] or None): proportion of each train label to use (e.g. 50/50)
+                If None, selects full train data    
+                Default None
         """
         self.df = df
         self._vectorizer = vectorizer
@@ -422,7 +425,7 @@ class TextDataset(Dataset):
             csv (str): path to the dataset
             split (str): split text into chars or words
         Returns:
-            Instance of Dataset
+            Instance of TextDataset
         """
         df = pd.read_csv(csv)
         train_df = df[df.split=='train']
@@ -438,7 +441,7 @@ class TextDataset(Dataset):
             csv (str): path to the dataset
             vectorizer_path (str): path to the saved vectorizer
         Returns:
-            Instance of Dataset
+            Instance of TextDataset
         """
         df = pd.read_csv(csv)
         with open(vectorizer_path) as f:
@@ -455,13 +458,13 @@ class TextDataset(Dataset):
             json.dump(self._vectorizer.to_dict(), f)
     
     def get_vectorizer(self):
-        """Returns vectorizer for the Dataset"""
+        """Returns vectorizer for the dataset"""
         return self._vectorizer
     
     def set_split(self, split="train"):
-        """Changes the split of the Dataset
+        """Changes the split of TextDataset
         
-        Options depend on splits used when creating Dataset
+        Options depend on splits used when creating TextDataset
         Ideally "train", "val", "test"
         """
         self._target_split = split
@@ -471,7 +474,7 @@ class TextDataset(Dataset):
         return self._target_size
     
     def __getitem__(self, index):
-        """Primary interface between Dataset and PyTorch's DataLoader
+        """Primary interface between TextDataset and PyTorch's DataLoader
         
         Used for generating batches of data (see utils.generate_batches)
         
