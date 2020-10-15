@@ -8,7 +8,8 @@ Created on Mon Oct 12 11:39:59 2020
 import string
 import math
 from collections import Counter
-from itertools import permutations
+from itertools import product
+import pandas as pd
 
 class CharNGram(object):
     """A character n-gram table trained on a list of words.
@@ -27,12 +28,11 @@ class CharNGram(object):
         self.laplace = laplace
         self.SOS_token = SOS_token
         self.EOS_token = EOS_token
-        
-        self.vocab = list(string.ascii_lowercase) + [SOS_token, EOS_token]
-        self.data = self._preprocess(data, n)
-        self.ngrams = self._split_and_count(self.data, self.n)
-
-        self.model = self._create_model()
+        self.data = data
+        self.vocab = list(string.ascii_lowercase) + [EOS_token]
+        self.processed_data = self._preprocess(self.data, n)
+        self.ngrams = self._split_and_count(self.processed_data, self.n)
+        self.model = self._smooth()
         
     def _preprocess(self, data, n):
         new_data = []
@@ -59,53 +59,73 @@ class CharNGram(object):
     
     def _initialize_counts(self, n):
         cntr = Counter()
-        for perm in permutations(string.ascii_lowercase, n):
+        for perm in product(string.ascii_lowercase, repeat=n):
             cntr[perm] = 0
         return cntr
     
-    def _create_model(self):
+    def _smooth(self):
         if self.n == 1:
             s = sum(self.ngrams.values())
-            return Counter({gram:count/s for gram, count in self.ngrams.items()})
+            return Counter({key: val/s for key, val in self.ngrams.items()})
         else:
             vocab_size = len(self.vocab)
             
-            ret = self.ngrams
+            ret = self.ngrams.copy()
             
-            m_grams = self._split_and_count(self.data, self.n-1)
+            m = self.n - 1
+            m_grams = self._split_and_count(self.processed_data, m)
             
-            for n_gram, n_count in self.ngrams.items():
-                m_gram = n_gram[:-1]
+            for ngram, value in self.ngrams.items():
+                m_gram = ngram[:-1]
                 m_count = m_grams[m_gram]
-                ret[n_gram] = math.log((n_count + self.laplace) /\
-                    (m_count + self.laplace * vocab_size))
+                ret[ngram] = (value + self.laplace) /\
+                            (m_count + self.laplace * vocab_size)
             
             return ret
-        
+    
+    def to_csv(self, filepath):
+        if self.n == 1:
+            df = pd.DataFrame({k:[v] for k,v in self.model.items()})
+        else:
+            idxs = sorted(set([' '.join(k[:-1]) for k in self.model.keys()]))
+            cols = sorted(set([k[-1] for k in self.model.keys()]))
+            df = pd.DataFrame(data=0.0, index=idxs, columns=cols)
+            for ngram, value in self.model.items():
+                context = ' '.join(ngram[:-1])
+                target = ngram[-1]
+                df.loc[context, target] = value
+            df = df.fillna(0.0)
+        df.to_csv(filepath, encoding='utf-8')
     
     def get_single_probability(self, word, log=False):
         if isinstance(word, str):
             word = self.process_word(word, self.n)
         prob = 0.0 if log else 1.0
         for ngram in self._split_word(word, self.n):
-            p = self.model[ngram]
+            p = self.model.loc[' '.join(ngram[:-1]), ngram[-1]]
             if log:
                 prob += p
             else:
                 prob *= math.exp(p)
-        return prob
+        return prob / len(word)
     
-    def get_distribution_from_context(self, context: tuple):
-        pass
-        
+    def compare_likelihood(self, data1, data2):
+        probs1 = sum([self.get_single_probability(w) for w in data1])
+        probs2 = sum([self.get_single_probability(w) for w in data2])
+        likelihood = probs1 / probs2
+        if likelihood > 1:
+            ret = f"Data1 is {likelihood:.2f} times more likely than Data2 under this model"
+        else:
+            ret = f"Data2 is {1/likelihood:.2f} times more likely than Data1 under this model"
+        return ret
+    
     def perplexity(self, test):
         test_tokens = self._preprocess(test, self.n)
-        # test_ngrams = nltk.ngrams(test_tokens, self.n)
         N = len(test_tokens)
         
         probs = 0.0
         for word in test_tokens:
-            probs += self.get_single_probability(word, log=True) / len(word)
+            probs += self.get_single_probability(word, log=True)
         
         return math.exp((-1/N) * probs)
     
@@ -123,11 +143,10 @@ eng_test = eng_words[idx1:]
 esp_train = esp_words[:idx1]
 esp_test = esp_words[idx1:]
 
+eus_train = eus_words[:idx1]
+eus_test = eus_words[idx1:]
+
 eng = CharNGram(eng_train, 3)
-esp = CharNGram(esp_train, 2)
+df = eng.to_csv('eng.csv')
 
-print(eng.get_perplexity(eng_test))
-print(eng.get_perplexity(esp_test))
-
-print(esp.get_perplexity(eng_test))
-print(esp.get_perplexity(esp_test))
+# print(eng.get_single_probability('alien'))

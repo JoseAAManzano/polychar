@@ -8,6 +8,7 @@ import os, unicodedata, re
 import pandas as pd
 import random
 import numpy as np
+from itertools import product
 
 random.seed(404)
 
@@ -18,23 +19,18 @@ file_path = "../../data/"
 target_path = "../../processed_data/"
 
 esp = pd.read_csv(os.path.join(file_path, 'ESP.csv'), encoding='utf-8')
-esp = esp[esp.percent_total > 90]
 eng = pd.read_csv(os.path.join(file_path, 'ENG.csv'), sep=',',
                     encoding='utf-8')
-eng = eng[eng.accuracy > 0.9]
 
 eus = pd.read_csv(os.path.join(file_path, 'EUS.txt'), sep='\t', header=None)
 eus.columns = ['spelling', 'freq']
 eus['len'] = eus['spelling'].apply(len)
 
 #%% Normalizing eus data
-eus['logfreq'] = np.log(eus.freq)
+eus = eus[(eus.freq > eus.freq.quantile(q=0.5))]
 
-eus['zfreq'] = (eus.logfreq - eus.logfreq.mean())/eus.logfreq.std()
-eus = eus[(eus.zfreq > 0.5)]
-
-esp = esp[(esp.zipf >= 0.5)]
-eng = eng[(eng.ZipfUS >= 0.5)]
+esp = esp[(esp.zipf > esp.zipf.quantile(q=0.5))]
+eng = eng[(eng.ZipfUS > eng.ZipfUS.quantile(q=0.5))]
 
 esp = esp[(esp.len >= 3) & (esp.len <= 10)]
 eng = eng[(eng.Length >= 3) & (eng.Length <=10)]
@@ -49,6 +45,41 @@ def preprocess(st):
 esp_words = list(set([preprocess(st) for st in esp.spelling]))
 eng_words = list(set([preprocess(st) for st in eng.spelling]))
 eus_words = list(set([preprocess(st) for st in eus.spelling]))
+
+def editDistance(word1, word2):
+    '''
+    Return minimum number of edits required to transform word1 into word2
+    Edits include: deletion, insertion, replacement
+    
+    Uses memoization to speed up the process
+    '''
+    n1, n2 = len(word1), len(word2)
+    memo = [[0]*(n2) for _ in range(n1)]
+    
+    def minDist(i, j):
+        if i < 0: return j+1
+        if j < 0: return i+1
+        if memo[i][j]: return memo[i][j]
+        if word1[i] == word2[j]:
+            memo[i][j] = minDist(i-1, j-1)
+            return memo[i][j]
+        memo[i][j] = 1 + min(minDist(i, j-1),
+                            minDist(i-1, j),
+                            minDist(i-1, j-1))
+        return memo[i][j]        
+    
+    return minDist(n1-1, n2-1)
+
+def get_num_cognates(vocab1, vocab2):
+    cognates = 0
+    for w1, w2 in product(vocab1, vocab2):
+        if editDistance(w1, w2) == 1:
+            cognates += 1
+    return cognates
+
+# print(get_num_cognates(esp_words, eng_words))
+# print(get_num_cognates(esp_words, eus_words))
+# print(get_num_cognates(eus_words, eng_words))
 
 random.shuffle(esp_words)
 random.shuffle(eng_words)
