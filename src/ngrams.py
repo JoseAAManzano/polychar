@@ -29,7 +29,7 @@ class CharNGram(object):
         self.SOS_token = SOS_token
         self.EOS_token = EOS_token
         self.data = data
-        self.vocab = list(string.ascii_lowercase) + [EOS_token]
+        self.vocab = list(string.ascii_lowercase) + [SOS_token, EOS_token]
         self.processed_data = self._preprocess(self.data, n)
         self.ngrams = self._split_and_count(self.processed_data, self.n)
         self.model = self._smooth()
@@ -59,8 +59,8 @@ class CharNGram(object):
     
     def _initialize_counts(self, n):
         cntr = Counter()
-        for perm in product(string.ascii_lowercase, repeat=n):
-            cntr[perm] = 0
+        for perm in product(self.vocab, repeat=n):
+            cntr[tuple(perm)] = 0
         return cntr
     
     def _smooth(self):
@@ -83,31 +83,37 @@ class CharNGram(object):
             
             return ret
     
-    def to_csv(self, filepath):
-        if self.n == 1:
-            df = pd.DataFrame({k:[v] for k,v in self.model.items()})
-        else:
-            idxs = sorted(set([' '.join(k[:-1]) for k in self.model.keys()]))
-            cols = sorted(set([k[-1] for k in self.model.keys()]))
-            df = pd.DataFrame(data=0.0, index=idxs, columns=cols)
+    def to_txt(self, filepath):
+        with open(filepath, 'w') as file:
             for ngram, value in self.model.items():
-                context = ' '.join(ngram[:-1])
-                target = ngram[-1]
-                df.loc[context, target] = value
-            df = df.fillna(0.0)
-        df.to_csv(filepath, encoding='utf-8')
+                file.write(f"{' '.join(ngram)}\t{value}\n")
+    
+    def from_txt(self, filepath):
+        with open(filepath, 'r') as file:
+            data = file.readlines()
+        model = Counter()
+        for ngram, value in data.split('\t'):
+            model[tuple(ngram.split(' '))] = value
+        return model
     
     def get_single_probability(self, word, log=False):
         if isinstance(word, str):
             word = self.process_word(word, self.n)
         prob = 0.0 if log else 1.0
         for ngram in self._split_word(word, self.n):
-            p = self.model.loc[' '.join(ngram[:-1]), ngram[-1]]
+            if ngram not in self.model.keys():
+                print(ngram)
+            p = self.model[ngram]
             if log:
-                prob += p
+                prob += math.log(p)
             else:
-                prob *= math.exp(p)
-        return prob / len(word)
+                prob *= p
+        return prob
+    
+    def get_distribution_from_context(self, context):
+        pad = self.n - 1 if self.n > 1 else 1
+        context = [self.SOS_token] * pad + list(context)
+        
     
     def compare_likelihood(self, data1, data2):
         probs1 = sum([self.get_single_probability(w) for w in data1])
@@ -125,7 +131,7 @@ class CharNGram(object):
         
         probs = 0.0
         for word in test_tokens:
-            probs += self.get_single_probability(word, log=True)
+            probs += self.get_single_probability(word, log=True) / len(word)
         
         return math.exp((-1/N) * probs)
     
@@ -146,7 +152,10 @@ esp_test = esp_words[idx1:]
 eus_train = eus_words[:idx1]
 eus_test = eus_words[idx1:]
 
-eng = CharNGram(eng_train, 3)
-df = eng.to_csv('eng.csv')
+eng = CharNGram(eng_train, 4)
+# for i in range(2, 5):
+#     eng = CharNGram(eng_train, i)
+#     df = eng.to_txt(f'eng{i}.txt')
 
-# print(eng.get_single_probability('alien'))
+print(eng.perplexity(eng_train))
+print(eng.perplexity(eng_test))

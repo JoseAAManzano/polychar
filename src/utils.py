@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
 """
+Classes and functions to handle input data for PyTorch models
+
+Classes heavily inspired from Rao, D., & McMahan, B. (2019). Natural Language
+Processing with PyTorch. O'Reilly Media.
+
 Created on Thu Oct  1 17:23:28 2020
 
-@author: josea
+@author: Jose Armando Aguasvivas
 """
 #%% Imports
 import torch
@@ -46,16 +51,30 @@ import json
 #     lang_ = torch.tensor(0.0 if lang == ref else 1.0).view(1, -1).to(device)
 #     return in_, out_, lang_
 
-def activ2color(value):
-    colors = ['#85c2e1', '#89c4e2', '#95cae5', '#99cce6', '#a1d0e8'
-    		'#b2d9ec', '#baddee', '#c2e1f0', '#eff7fb', '#f9e8e8',
-    		'#f9e8e8', '#f9d4d4', '#f9bdbd', '#f8a8a8', '#f68f8f',
-    		'#f47676', '#f45f5f', '#f34343', '#f33b3b', '#f42e2e']
-    value = int((value*100)/5)
-    return colors[value]
+# def activ2color(value):
+#     colors = ['#85c2e1', '#89c4e2', '#95cae5', '#99cce6', '#a1d0e8'
+#     		'#b2d9ec', '#baddee', '#c2e1f0', '#eff7fb', '#f9e8e8',
+#     		'#f9e8e8', '#f9d4d4', '#f9bdbd', '#f8a8a8', '#f68f8f',
+#     		'#f47676', '#f45f5f', '#f34343', '#f33b3b', '#f42e2e']
+#     value = int((value*100)/5)
+#     return colors[value]
 
 def generate_batches(dataset, batch_size, shuffle=True,
                      drop_last=True, device="cpu"):
+    """
+    Generator function wrapping PyTorch's DataLoader
+    
+    Ensures torch.Tensors are sent to appropriate device
+    
+    Args:
+        dataset (Dataset): instance of Dataset class
+        batch_size (int)
+        shuffle (bool): whether to shuffle the data
+            Default True
+        drop_last (bool): drops reamining data if it doesn't fit in batch
+            Default True
+        device (torch.device): device to send tensors (for GPU computing)
+    """
     dataloader = DataLoader(dataset=dataset, batch_size=batch_size,
                              shuffle=shuffle, drop_last=drop_last)
     
@@ -66,6 +85,7 @@ def generate_batches(dataset, batch_size, shuffle=True,
         yield out_data_dict
         
 def set_all_seeds(seed, device):
+    """Simultaneously set all seeds from numpy and PyTorch"""
     np.random.seed(seed)
     torch.manual_seed(seed)
     if device == torch.device('cuda:0'):
@@ -131,8 +151,24 @@ def print_state_dict(train_state):
 
 #%% Helper classes
 class Vocabulary(object):
+    """
+    Class to handle vocabulary extracted from list of words or sentences.
+    
+    TODO: Extend to handle phonemes as well
+    """
     def __init__(self, stoi=None, SOS="<s>", EOS="</s>", PAD="<p>"):
-        """Supports either char or word level vocabulary"""
+        """
+        Args:
+            stoi (dict or None): mapping from tokens to indices
+                If None, creates an empty dict
+                Default None
+            SOS (str or None): Start-of-Sequence token
+                Default "<s>"
+            EOS (str or None): End-of-Sequence token
+                Default "</s>"
+            PAD (str or None): Padding token used for handling mini-batches
+                Default "<p>"
+        """
         if stoi is None:
             stoi = {}
         self._stoi = stoi
@@ -150,9 +186,7 @@ class Vocabulary(object):
             self.PAD_idx = self.add_token(self._PAD_token)
             
     def to_dict(self):
-        """
-        Returns vocabulary dictionary
-        """
+        """Returns full vocabulary dictionary"""
         return {
             "stoi": self._stoi,
             "itos": self._itos,
@@ -163,12 +197,17 @@ class Vocabulary(object):
 
     @classmethod
     def from_dict(cls, contents):
-        """
-        Instantiates vocabulary from dictionary
-        """
+        """Instantiates vocabulary from dictionary"""
         return cls(**contents)
     
     def add_token(self, token):
+        """Update mapping dicts based on token
+        
+        Args:
+            token (str): token to be added
+        Returns:
+            idx (int): index corresponding to the token
+        """
         try:
             idx = self._stoi[token]
         except KeyError:
@@ -178,12 +217,15 @@ class Vocabulary(object):
         return idx
     
     def add_many(self, tokens):
+        """Adds multiple tokens, one at a time"""
         return [self.add_token(token) for token in tokens]
     
     def token2idx(self, token):
+        """Returns index of token"""
         return self._stoi[token]
     
     def idx2token(self, idx):
+        """Returns token based on index"""
         if idx not in self._itos:
             raise KeyError(f"Index {idx} not in Vocabulary")
         return self._itos[idx]
@@ -196,11 +238,40 @@ class Vocabulary(object):
 
 
 class Vectorizer(object):
+    """
+    The Vectorizer creates one-hot vectors from sequence of characters/words
+    stored in the Vocabulary
+    
+    TODO: split into word/phoneme vectorizers
+    """
     def __init__(self, data_vocab, label_vocab):
+        """
+        Args:
+            data_vocab (Vocabulary): maps char/words to indices
+            label_vocab (Vocabulary): maps labels to indices
+        """
         self.data_vocab = data_vocab
         self.label_vocab = label_vocab
         
     def vectorize(self, data, vector_len=-1):
+        """Vectorize data into observations and targets
+        
+        Outputs are the vectorized data split into:
+            data[:-1] and data[1:]
+        At each timestep, the first tensor is the observations, the second
+        vector is the target predictions (indices of words and characters)
+        
+        Args:
+            data (str or List[str]): data to be vectorized
+                Works for both char level and word level vectorizations
+            vector_len (int): Maximum vector length for mini-batch
+                Defaults to len(data) - 1
+        Returns:
+            from_vector (torch.Tensor): observation tensor of
+                shape [vector_len, len(data_vocab)]
+            to_vector (torch.Tensor): target prediction tensor of
+                shape [vector_len, 1]
+        """
         indices = [self.data_vocab.SOS_idx]
         indices.extend(self.data_vocab.token2idx(t) for t in data)
         indices.append(self.data_vocab.EOS_idx)
@@ -213,7 +284,8 @@ class Vectorizer(object):
         if vector_len < 0:
             vector_len = len(indices)-1
         
-        from_vector = torch.empty(vector_len, len(self.data_vocab), dtype=torch.float32)
+        from_vector = torch.empty(vector_len, len(self.data_vocab),
+                                  dtype=torch.float32)
         from_indices = indices[:-1]
         # Add pre-padding
         from_vector[:-len(from_indices)] = self.onehot([self.data_vocab.PAD_idx])
@@ -227,7 +299,16 @@ class Vectorizer(object):
         return from_vector, to_vector
     
     def onehot(self, indices):
-        onehot = torch.zeros(len(indices), len(self.data_vocab), dtype=torch.float32)
+        """Encodes a list of indices into a one-hot tensor
+        
+        Args:
+            indices (List[int]): list of indices to encode
+        Returns
+            onehot (torch.Tensor): one-hot tensor from indices of
+                shape [len(indices), len(data_vocab)]
+        """
+        onehot = torch.zeros(len(indices), len(self.data_vocab),
+                             dtype=torch.float32)
         
         for i, idx in enumerate(indices):
             onehot[i][idx] = 1.
@@ -235,6 +316,17 @@ class Vectorizer(object):
         
     @classmethod
     def from_df(cls, df, split="char"):
+        """Instantiate the vectorizer from a dataframe
+        
+        Args:
+            df (pandas.DataFrame): the dataset
+            splits (str): split data into chars or words
+                Default "chars"
+        Returns:
+            an instance of Vectorizer
+            
+        TODO: split into different window sizes using int splits
+        """
         data_vocab = Vocabulary()
         label_vocab = Vocabulary(SOS=None, EOS=None, PAD=None)
         
@@ -250,11 +342,19 @@ class Vectorizer(object):
     
     @classmethod
     def from_dict(cls, contents):
+        """Instantiate the vectorizer from a dictionary
+        
+        Args:
+            contents (pandas.DataFrame): the dataset
+        Returns:
+            an instance of Vectorizer
+        """
         data_vocab = Vocabulary.from_dict(contents['data_vocab'])
         label_vocab = Vocabulary.from_dict(contents['label_vocab'])
         return cls(data_vocab, label_vocab)
     
     def to_dict(self):
+        """Returns a dictionary of the vocabularies"""
         return {
             'data_vocab': self.data_vocab.to_dict(),
             'label_vocab': self.label_vocab.to_dict()
@@ -262,7 +362,13 @@ class Vectorizer(object):
         
 
 class TextDataset(Dataset):
+    """Combines Vocabulary and Vectorizer classes into one easy interface"""
     def __init__(self, df, vectorizer, p=None):
+        """
+        Args:
+            df (pandas.DataFrame): the dataset
+            vectorizer (Vectorizer): Vectorizer instantiated from the dataset
+        """
         self.df = df
         self._vectorizer = vectorizer
         
@@ -304,25 +410,60 @@ class TextDataset(Dataset):
         
     @classmethod
     def load_dataset_and_make_vectorizer(cls, csv, split="char", p=None):
+        """Loads a pandas DataFrame and makes Vectorizer from scratch
+        
+        DataFrame should have following named columns:
+            [data, labels, split] where
+            data are the text (documents) to vectorize
+            labels are the target labels for the text (for classification)
+            split indicates train, val, and test splits of the data
+        
+        Args:
+            csv (str): path to the dataset
+            split (str): split text into chars or words
+        Returns:
+            Instance of Dataset
+        """
         df = pd.read_csv(csv)
         train_df = df[df.split=='train']
         return cls(df, Vectorizer.from_df(train_df, split=split), p)
     
     @classmethod
     def load_dataset_and_load_vectorizer(cls, csv, vectorizer_path):
+        """Load dataset and the corresponding vectorizer. 
+        
+        Used in the case in the vectorizer has been stored for re-use
+        
+        Args:
+            csv (str): path to the dataset
+            vectorizer_path (str): path to the saved vectorizer
+        Returns:
+            Instance of Dataset
+        """
         df = pd.read_csv(csv)
         with open(vectorizer_path) as f:
             vectorizer = Vectorizer.from_dict(json.load(f))
         return cls(df, vectorizer)
     
     def save_vectorizer(self, vectorizer_path):
+        """Saves vectorizer in json format
+        
+        Args:
+            vectorizer_path (str): path to save vectorizer
+        """
         with open(vectorizer_path, 'w') as f:
             json.dump(self._vectorizer.to_dict(), f)
     
     def get_vectorizer(self):
+        """Returns vectorizer for the Dataset"""
         return self._vectorizer
     
     def set_split(self, split="train"):
+        """Changes the split of the Dataset
+        
+        Options depend on splits used when creating Dataset
+        Ideally "train", "val", "test"
+        """
         self._target_split = split
         self._target_df, self._target_size = self._lookup_dict[split]
     
@@ -330,6 +471,16 @@ class TextDataset(Dataset):
         return self._target_size
     
     def __getitem__(self, index):
+        """Primary interface between Dataset and PyTorch's DataLoader
+        
+        Used for generating batches of data (see utils.generate_batches)
+        
+        Args:
+            index (int): Index of the data point
+        Returns:
+            Dictionary holding the data point with keys
+                [X, Y, label]
+        """
         row = self._target_df.iloc[index]
         
         from_vector, to_vector = self._vectorizer.vectorize(row.data,
@@ -340,5 +491,12 @@ class TextDataset(Dataset):
         return {'X': from_vector, 'Y': to_vector, 'label': label}
     
     def get_num_batches(self, batch_size):
+        """Returns number of batches in the dataset given batch_size
+        
+        Args:
+            batch_size (int)
+        Returns:
+            Number of batches in dataset
+        """
         return len(self) // batch_size
 
