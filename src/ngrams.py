@@ -4,7 +4,6 @@ Created on Mon Oct 12 11:39:59 2020
 
 @author: josea
 """
-
 import string
 import math
 from collections import Counter
@@ -17,11 +16,19 @@ class CharNGram(object):
     Concepts from Jurafsky, D., & Martin, J.H. (2019). Speech and Language
     Processing. Stanford Press. https://web.stanford.edu/~jurafsky/slp3/
     
-    TODO ADD DOC
+    This class is not optimized for large ngram models, use with caution
+    for models of order 5 and above.
     """
     def __init__(self, data, n, laplace=1, SOS_token='<s>', EOS_token='</s>'):
-        """
-        Data should be iterable of words
+        """Data should be iterable of words
+        
+        Args:
+            data (List[str]): dataset from which to create the ngram model
+            n (int): order of the model. Should be larger than 0
+            laplace (int): additive smoothing factor for unseen combinations
+                Default 1
+            SOS_token (str): Start-of-Sequence token
+            EOS_token (str): End-of-Sequence token
         """
         assert (n > 0), n
         self.n = n
@@ -35,22 +42,50 @@ class CharNGram(object):
         self.model = self._smooth()
         
     def _preprocess(self, data, n):
+        """Private method to preprocess a dataset of documents
+        
+        Args:
+            data (List[str]): documents to be processed
+            n (int): order of ngram model for processing
+        Returns:
+            new_data (List[str]): preprocessed data
+        """
         new_data = []
         for word in data:
             new_data.append(self.process_word(word, n))
         return new_data
     
     def process_word(self, word, n):
-        pad = (n-1) if n > 1 else 1
+        """Adds SOS and EOS tokens with padding
+        
+        Adds padding of SOS_tokens and EOS_tokens to each document
+            padding size = n-1 for n > 1
+        
+        Args:
+            word (str): word to be padded
+            n (int): order of ngram model
+        Returns:
+            padded word (List[str])
+        """
+        pad = max(1, n-1)
         return [self.SOS_token] * pad +\
                     list(word.lower()) +\
-                    [self.EOS_token] * pad
+                    [self.EOS_token]
     
     def _split_word(self, word, n):
+        """Private generator to handle moving window over word of size n"""
         for i in range(len(word) - n + 1):
             yield tuple(word[i:i+n])
     
     def _split_and_count(self, data, n):
+        """Private method to create ngram counts
+        
+        Args:
+            data (List[str]): preprocessed data
+            n (int): order of ngram model
+        Returns:
+            cntr (Counter): count of each ngram in data
+        """
         cntr = self._initialize_counts(n)
         for word in data:
             for ngram in self._split_word(word, n):
@@ -58,13 +93,24 @@ class CharNGram(object):
         return cntr
     
     def _initialize_counts(self, n):
+        """Private method to initialize the ngram counter
+        
+        Accounts for unseen tokens by taking the product of the vocabulary
+        
+        Args:
+            n (int): order of ngram model
+        Returns:
+            cntr (Counter): initialized counter of 0s for each plausible ngram
+        """
         def is_plausible(permutation):
-            if self.SOS_token not in permutation or self.EOS_token not in permutation:
-                return True
+            if self.SOS_token not in permutation and \
+                self.EOS_token not in permutation: return True
+            if self.SOS_token in permutation and\
+                self.EOS_token in permutation: return False
             n = len(permutation)
             
             if self.EOS_token in permutation[:-1]: return False
-            
+            if self.SOS_token in permutation[1:]: return False
             flg = False
             cnt = 0
             for i in range(n-1, -1, -1):
@@ -93,6 +139,12 @@ class CharNGram(object):
         return cntr
     
     def _smooth(self):
+        """Private method to convert counts to probabilities using
+        additive Laplace smoothing
+        
+        Returns:
+            cntr (Counter): normalized probabilities of each ngram in data
+        """
         if self.n == 1:
             s = sum(self.ngrams.values())
             return Counter({key: val/s for key, val in self.ngrams.items()})
@@ -113,11 +165,13 @@ class CharNGram(object):
             return ret
     
     def to_txt(self, filepath):
+        """Saves model to disk as a tab separated txt file"""
         with open(filepath, 'w') as file:
             for ngram, value in self.model.items():
                 file.write(f"{' '.join(ngram)}\t{value}\n")
     
     def from_txt(self, filepath):
+        """Reads model from a tab separated txt file"""
         with open(filepath, 'r') as file:
             data = file.readlines()
         model = Counter()
@@ -126,7 +180,14 @@ class CharNGram(object):
         return model
     
     def to_df(self):
-        """Do not use with >= 4-grams"""
+        """Creates a DataFrame from Counter of ngrams
+        
+        Warning: Do not use with ngrams of order >= 5
+        
+        Returns:
+            df (pandas.DataFrame): dataframe of normalized probabilities
+                shape [n_plausible_ngrams, len(vocab)]
+        """
         idxs, cols = set(), set()
         for k in self.model.keys():
             idxs.add(' '.join(k[:-1]))
@@ -138,29 +199,97 @@ class CharNGram(object):
             cntx = ' '.join(ngram[:-1])
             trgt = ngram[-1]
             df.loc[cntx, trgt] = value
-        return df.fillna(0.0).drop(self.SOS_token, axis=1)
-    
-    def to_csv(self):
-        pass
+        return df.fillna(0.0)
     
     def get_single_probability(self, word, log=False):
+        """Calculated the probability (likelihood) of a word given the ngram
+        model
+        
+        Args:
+            word (str or List[str]): target word
+            log (bool): whether to get loglikelihood instead of probability
+        Returns:
+            prob (float): probability of the word given the ngram model
+        """
         if isinstance(word, str):
             word = self.process_word(word, self.n)
+        n = len(word)
         prob = 0.0 if log else 1.0
         for ngram in self._split_word(word, self.n):
             if ngram not in self.model.keys():
+                n -= 1
                 print(ngram)
+                continue
             p = self.model[ngram]
             if log:
                 prob += math.log(p)
             else:
                 prob *= p
-        return prob
+        return prob / n
+    
+    def perplexity(self, data):
+        """Calculated the perplexity of an entire dataset given the model
+        
+        Perplexity is the inverse probability of the dataset, normalized
+        by the number of words
+        
+        To avoid numeric overflow due to multiplication of probabilities,
+        the probabilties are log-transformed and the final score is then
+        exponentiated. Thus:
+            
+            Perplexity = exp(-(1/N) * sum(probs))
+        
+        where N is the number of words and probs is the vector of probabilities
+        for each word in the dataset.
+        
+        Lower perplexity is equivalent to higher probability of the data given
+        the ngram model.
+        
+        Args:
+            data (\List[str]): datset of words
+        Returns:
+            perplexity (float): perplexity of the dataset given the ngram model
+        """
+        test_tokens = self._preprocess(data, self.n)
+        N = len(test_tokens)
+        
+        probs = 0.0
+        for word in test_tokens:
+            probs += self.get_single_probability(word, log=True)
+        
+        return math.exp((-1/N) * probs)
     
     def get_distribution_from_context(self, context):
-        pad = self.n - 1 if self.n > 1 else 1
-        context = [self.SOS_token] * pad + list(context)
-        
+        m = len(context)
+        if m < self.n-1:
+            context = [self.SOS_token] * (self.n-m-1) + list(context)
+        elif m > self.n-1:
+            context = list(context[-self.n+1:])
+        context = list(context)
+        ret = {v:0 for v in self.vocab}
+        for v in self.vocab:
+            ret[v] = self.model[tuple(context + [v])]
+        del ret[self.SOS_token]
+        return ret
+    
+    def _best_candidate(self, prev, i, without=[]):
+        letters = self.get_distribution_from_context(prev)
+        letters = {l:prob for l, prob in letters.items() if l not in without}
+        letters = sorted(letters.items(), key=lambda l: l[1], reverse=True)
+        return letters[0 if prev != () and prev[-1] != self.SOS_token else i]
+    
+    def generate_words(self, num, min_len=3, max_len=10, without=[]):
+        for i in range(num):
+            word, prob = [self.SOS_token] * max(1, self.n-1), 1
+            while word[-1] != self.EOS_token:
+                prev = () if self.n == 1 else tuple(word[-self.n+1:])
+                blacklist = word + ([self.EOS_token] if len(word) < max_len else [])
+                next_token, next_prob = self._best_candidate(prev, i, without=blacklist)
+                word.append(next_token)
+                prob *= next_prob
+                if len(word) >= max_len:
+                    word.append(self.EOS_token)
+            yield ''.join(w for w in word if w not in [self.SOS_token, self.EOS_token]), -1/math.log(prob)
     
     def compare_likelihood(self, data1, data2):
         probs1 = sum([self.get_single_probability(w) for w in data1])
@@ -171,16 +300,6 @@ class CharNGram(object):
         else:
             ret = f"Data2 is {1/likelihood:.2f} times more likely than Data1 under this model"
         return ret
-    
-    def perplexity(self, test):
-        test_tokens = self._preprocess(test, self.n)
-        N = len(test_tokens)
-        
-        probs = 0.0
-        for word in test_tokens:
-            probs += self.get_single_probability(word, log=True) / len(word)
-        
-        return math.exp((-1/N) * probs)
     
     def __len__(self):
         return len(self.ngrams)
@@ -196,4 +315,6 @@ eng_test = eng_words[idxs:]
 
 model = CharNGram(eng_train, 2)
 
-df = model.to_df()
+for word, prob in model.generate_words(10):
+    print(word, prob)
+# df = model.to_df()

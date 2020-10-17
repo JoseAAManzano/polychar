@@ -288,7 +288,9 @@ class Vectorizer(object):
                                   dtype=torch.float32)
         from_indices = indices[:-1]
         # Add pre-padding
-        from_vector[:-len(from_indices)] = self.onehot([self.data_vocab.PAD_idx])
+        from_vector[:-len(from_indices)] = self.onehot([
+                                        self.data_vocab.PAD_idx
+                                        ])
         from_vector[-len(from_indices):] = self.onehot(from_indices)
         
         to_vector = torch.empty(vector_len, dtype=torch.int64)
@@ -368,8 +370,8 @@ class TextDataset(Dataset):
         Args:
             df (pandas.DataFrame): the dataset
             vectorizer (Vectorizer): Vectorizer instantiated from the dataset
-            p (List[float] or None): proportion of each train label to use (e.g. 50/50)
-                If None, selects full train data    
+            p (List[float] or None): proportion of each train label 
+                to use (e.g. 50/50). If None, selects full train data    
                 Default None
         """
         self.df = df
@@ -393,7 +395,7 @@ class TextDataset(Dataset):
         self.test_df = self.df[self.df.split=='test']
         self.test_size = len(self.test_df)
         
-        self._max_seq_len = max(map(len, self.df.data)) + 1 # Adding either SOS/EOS
+        self._max_seq_len = max(map(len, self.df.data)) + 1 # SOS/EOS
         
         self._lookup_dict = {
             "train": (self.train_df, self.train_size),
