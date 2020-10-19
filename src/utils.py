@@ -10,59 +10,20 @@ Created on Thu Oct  1 17:23:28 2020
 @author: Jose Armando Aguasvivas
 """
 #%% Imports
-import torch
-from torch.utils.data import DataLoader
-import numpy as np
-from torch.utils.data import Dataset
-import pandas as pd
-import json
-import string
 import math
-from collections import Counter
+import json
+import torch
+import string
+import numpy as np
+import pandas as pd
+import torch.nn.functional as F
+
 from itertools import product
+from collections import Counter
+from torch.utils.data import DataLoader
+from torch.utils.data import Dataset
 
 #%% Helper functions
-# def encode(st, stoi):
-#     """
-#     Output: List of <SOS> + char indices + <EOS>
-#     """
-#     return [0] + [stoi[c] for c in st] + [1]
-
-# def letter2onehot(letter, n_letters, stoi):
-#     '''
-#     Returns one-hot encoding of a letter in shape (1, n_letters)
-#     '''
-#     onehot = torch.zeros(1, n_letters)
-#     onehot[0][stoi[letter]] = 1
-#     return onehot
-
-
-# def line2tensor(st, n_letters):
-#     '''
-#     Returns one-hot Tensor of a string in shape (len(st), 1, n_letters)
-#     '''
-#     tensor = torch.zeros(len(st), 1, n_letters)
-#     for i, l in enumerate(st):
-#         tensor[i][0][l] = 1
-#     return tensor
-
-# def randomExample(data, n_letters, stoi, device, langs, ref='ESP', p=[0.5, 0.5]):
-#     lang = np.random.choice(langs, p=p)
-#     word = np.random.choice(data[lang], size=1)[0]
-#     word = encode(word, stoi)
-#     in_ = line2tensor(word[:-1], n_letters).to(device)
-#     out_ = torch.LongTensor(word[1:]).to(device)
-#     lang_ = torch.tensor(0.0 if lang == ref else 1.0).view(1, -1).to(device)
-#     return in_, out_, lang_
-
-# def activ2color(value):
-#     colors = ['#85c2e1', '#89c4e2', '#95cae5', '#99cce6', '#a1d0e8'
-#     		'#b2d9ec', '#baddee', '#c2e1f0', '#eff7fb', '#f9e8e8',
-#     		'#f9e8e8', '#f9d4d4', '#f9bdbd', '#f8a8a8', '#f68f8f',
-#     		'#f47676', '#f45f5f', '#f34343', '#f33b3b', '#f42e2e']
-#     value = int((value*100)/5)
-#     return colors[value]
-
 def generate_batches(dataset, batch_size, shuffle=True,
                      drop_last=True, device="cpu"):
     """
@@ -148,12 +109,37 @@ def print_state_dict(train_state):
            f"train_loss: {train_state['train_loss'][-1]:.4f} | "
            f"val_loss: {train_state['val_loss'][-1]:.4f}\n"
            f"train_acc_chars: {train_state['train_acc'][-1]:.2f} | "
-           f"train_acc_lang: {train_state['train_lang_acc'][-1]:.2f}\n"
+           # f"train_acc_lang: {train_state['train_lang_acc'][-1]:.2f}\n"
            f"val_acc_chars: {train_state['val_acc'][-1]:.2f} | "
-           f"val_acc_lang: {train_state['val_lang_acc'][-1]:.2f}\n"))
+           # f"val_acc_lang: {train_state['val_lang_acc'][-1]:.2f}\n"
+           ))
     
+def sample_from_model(model, vectorizer, num_samples=1, sample_size=10,
+                      temp=1.0, device='cpu'):
+    begin_seq = [vectorizer.data_vocab.SOS_idx for _ in range(num_samples)]
+    begin_seq = vectorizer.onehot(begin_seq).unsqueeze(1).to(device)
+    indices = [begin_seq]
+    
+    h_t = model.initHidden(batch_size=num_samples, device=device)
+    
+    for time_step in range(sample_size):
+        x_t = indices[time_step]
+        out, hidden = model(x_t, h_t)
+        prob = out.view(-1).div(temp).exp()
+        selected = vectorizer.onehot(torch.multinomial(prob,
+                                                       num_samples=num_samples
+                                                       ))
+        selected = selected.unsqueeze(1).to(device)
+        indices.append(selected)
+    indices = torch.stack(indices).squeeze(1).permute(2, 0, 1)
+    print(indices.shape)
+    return indices
+        
+
 
 #%% Helper classes
+    
+#%% Vocabulary class
 class Vocabulary(object):
     """
     Class to handle vocabulary extracted from list of words or sentences.
@@ -240,7 +226,7 @@ class Vocabulary(object):
     def __len__(self):
         return len(self._stoi)
 
-
+#%% Vectorizer Class
 class Vectorizer(object):
     """
     The Vectorizer creates one-hot vectors from sequence of characters/words
@@ -366,7 +352,7 @@ class Vectorizer(object):
             'label_vocab': self.label_vocab.to_dict()
             }
         
-
+#%% TextDataset class
 class TextDataset(Dataset):
     """Combines Vocabulary and Vectorizer classes into one easy interface"""
     def __init__(self, df, vectorizer, p=None):
@@ -509,7 +495,7 @@ class TextDataset(Dataset):
         """
         return len(self) // batch_size
 
-
+#%% CharNGram Class
 class CharNGram(object):
     """A character n-gram model trained on a list of words.
     
@@ -780,6 +766,13 @@ class CharNGram(object):
         del dist[self.SOS_token]
         return dist
     
+    def calculate_accuracy(self, wordlist, topk=1):
+        N = len(wordlist)
+        for word in wordlist:
+            for ngram in self._split_words(word, self.n):
+                
+        
+    
     def _next_candidate(self, prev, without=[]):
         """Private method to select next candidate from previous context
         
@@ -833,3 +826,115 @@ class CharNGram(object):
     
     def __str__(self):
         return f"<{self.n}-gram model(size={len(self)})>"
+
+#%% Trie
+def TrieNode(object):
+    """Node for the Trie class"""
+    def __init__(self, vocab_len=27):
+        """
+        Args:
+            vocab_len (int): length of the vocabulary
+        """
+        self.finished = False
+        self.children = [None] * vocab_len
+        self.prob = 0
+        self.prefix = ''
+        self.cnt = 0
+        
+def Trie(object):
+    """Trie (pronounced "try") or prefix tree is a tree data structure,
+    which is used for retrieval of a key in a dataset of strings.
+    """
+    def __init__(self, vocab_len=27):
+        """
+        Args:
+            vocab_len (int): length of the vocabulary
+        """
+        self.vocab_len = vocab_len
+        self.root = TrieNode(vocab_len=vocab_len)
+    
+    def _ord(self, c):
+        """Private method to get index from character"""
+        if c == '</s>': 
+            ret = self.vocab_len - 1
+        else:
+            ret = ord(c) - ord('a')
+        
+        if not 0 <= ret <= self.vocab_len:
+            raise KeyError(f"Character index {ret} not in vocabulary")
+        else:
+            return ret
+
+    def insert(self, word):
+        """Inserts a word into the Trie
+        
+        Args:
+            word (str or List[str]): word to be added to Trie
+        """
+        curr = self.root
+        
+        for c in word:
+            i = self._ord(c)
+            if not curr.children[i]:
+                curr.children[i] = TrieNode(vocab_len=self.vocab_len)
+            context = curr.prefix
+            curr = curr.children[i]
+            curr.prefix = context + c
+            curr.cnt += 1
+        
+        curr.finished = True
+    
+    def insert_many(self, wordlist):
+        """Inserts several words into the Trie
+        
+        Args:
+            wordlist (List[List[str]]): list of words to be added to Trie
+        """
+        for word in wordlist:
+            self.insert(word)
+    
+    def search(self, word):
+        """Returns True if word is in the Trie"""
+        curr = self.root
+        for c in word:
+            i = self._ord(c)
+            if not curr.children[i]:
+                return False
+            curr = curr.children[i]
+        return curr.finished
+            
+    def starts_with(self, prefix):
+        """Returns True if prefix is in Trie"""
+        curr = self.root
+        for c in prefix:
+            i = self._ord(c)
+            if not curr.children[i]:
+                return False
+            curr = curr.children[i]
+        return True
+    
+    def get_probabilities(self, node):
+        """Calculates the probability of different prefixes"""
+        curr = node
+        total = curr.cnt
+        
+        for i in range(self.vocab_len):
+            if curr.children[i]:
+                curr.children[i].prob /= total
+                self.calculate_probabilities(curr.children[i])
+    
+    def calculate_empirical_distribution(self):
+        """Calculates empirical distribution for the entire Trie"""
+        q = []
+        q.append(self.root)
+        while q:
+            p = []
+            curr = q.pop()
+            cnt = 0
+            for i in range(self.vocab_len):
+                if curr.children[i]:
+                    q.append(curr.children[i])
+                    p.append(curr.children[i].prob)
+                else:
+                    cnt += 1
+                    p.append(0)

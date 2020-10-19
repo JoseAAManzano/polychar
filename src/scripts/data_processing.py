@@ -4,10 +4,12 @@ Created on Thu Oct  1 15:31:40 2020
 
 @author: josea
 """
-import os, unicodedata, re
-import pandas as pd
+import os
+import re
 import random
-import numpy as np
+import unicodedata
+import pandas as pd
+
 from itertools import product
 
 random.seed(404)

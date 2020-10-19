@@ -20,12 +20,12 @@ class PolyChar(nn.Module):
             input_size=n_in,
             hidden_size=n_hidden,
             num_layers=n_layers,
-            dropout=drop_p,
+            # dropout=drop_p,
             batch_first=True
             )
         self.fc = nn.Linear(n_hidden, n_out)
         # Predict language class after every letter
-        self.lang_pred = nn.Linear(n_hidden, 1) 
+        # self.lang_pred = nn.Linear(n_hidden, 1) 
         
     def forward(self, x, hidden, apply_sig=False, apply_sfmx=False):
         out, hidden = self.lstm(x, hidden)
@@ -37,16 +37,16 @@ class PolyChar(nn.Module):
         chars_out = self.fc(F.dropout(out1, p=self.drop_p))
         
         # # Get last hidden state for prediction
-        l_pred = out[:, -1] # Shape = [batch_size, n_hidden]
-        l_pred = self.lang_pred(F.dropout(l_pred, p=self.drop_p))
+        # l_pred = out[:, -1] # Shape = [batch_size, n_hidden]
+        # l_pred = self.lang_pred(F.dropout(l_pred, p=self.drop_p))
     
         if apply_sfmx:
             chars_out = F.softmax(chars_out, dim=1)
             
-        if apply_sig:
-            l_pred = F.sigmoid(l_pred)
+        # if apply_sig:
+        #     l_pred = F.sigmoid(l_pred)
         
-        return chars_out.view(batch_size, seq_size, self.n_out), l_pred, hidden
+        return chars_out.view(batch_size, seq_size, self.n_out), hidden
         
     def initHidden(self, batch_size, device):
         return (torch.zeros(self.n_layers, batch_size, self.n_hidden).to(device),
