@@ -9,6 +9,7 @@ import math
 from collections import Counter
 from itertools import product
 import pandas as pd
+import torch
 
 class CharNGram(object):
     """A character n-gram model trained on a list of words.
@@ -202,7 +203,7 @@ class CharNGram(object):
         return df.fillna(0.0)
     
     def get_single_probability(self, word, log=False):
-        """Calculated the probability (likelihood) of a word given the ngram
+        """Calculates the probability (likelihood) of a word given the ngram
         model
         
         Args:
@@ -228,7 +229,7 @@ class CharNGram(object):
         return prob / n
     
     def perplexity(self, data):
-        """Calculated the perplexity of an entire dataset given the model
+        """Calculates the perplexity of an entire dataset given the model
         
         Perplexity is the inverse probability of the dataset, normalized
         by the number of words
@@ -260,61 +261,72 @@ class CharNGram(object):
         return math.exp((-1/N) * probs)
     
     def get_distribution_from_context(self, context):
+        """Get the multinomial distribution for the next character given a
+        context
+        
+        Args:
+            context (str or List[str]): context of variable length
+        Returns:
+            dist (dict): probability distribution of the next letter
+        """
         m = len(context)
         if m < self.n-1:
             context = [self.SOS_token] * (self.n-m-1) + list(context)
         elif m > self.n-1:
             context = list(context[-self.n+1:])
         context = list(context)
-        ret = {v:0 for v in self.vocab}
+        dist = {v:0 for v in self.vocab}
         for v in self.vocab:
-            ret[v] = self.model[tuple(context + [v])]
-        del ret[self.SOS_token]
-        return ret
+            dist[v] = self.model[tuple(context + [v])]
+        del dist[self.SOS_token]
+        return dist
     
-    def _best_candidate(self, prev, i, without=[]):
+    def _next_candidate(self, prev, without=[]):
+        """Private method to select next candidate from previous context
+        
+        Candidates are selected at random from a multinomial distribution
+        weighted by the probability of next token given context.
+        
+        Args:
+            prev (Tuple[str]): previous context
+        Returns:
+            letter (str): selected next candidate
+            prob (float): probability of next candidate given context
+        """
         letters = self.get_distribution_from_context(prev)
         letters = {l:prob for l, prob in letters.items() if l not in without}
-        letters = sorted(letters.items(), key=lambda l: l[1], reverse=True)
-        return letters[0 if prev != () and prev[-1] != self.SOS_token else i]
+        letters, probs = list(letters.keys()), list(letters.values())
+        topi = torch.multinomial(torch.FloatTensor(probs), 1)[0].item()
+        return letters[topi], probs[topi]
     
     def generate_words(self, num, min_len=3, max_len=10, without=[]):
+        """Generates a number of words by sampling from the ngram model
+        
+        Generator method.
+        
+        Args:
+            num (int): number of words to generate
+            min_len (int): minimum length of the words
+            max_len (int): maximum length of the words
+            without (List[str]): list of tokens to ignore during selection
+        Yields:
+            word (str): generated word
+        """
         for i in range(num):
             word, prob = [self.SOS_token] * max(1, self.n-1), 1
             while word[-1] != self.EOS_token:
                 prev = () if self.n == 1 else tuple(word[-self.n+1:])
-                blacklist = word + ([self.EOS_token] if len(word) < max_len else [])
+                blacklist = [self.EOS_token] if len(word) < min_len else []
                 next_token, next_prob = self._best_candidate(prev, i, without=blacklist)
                 word.append(next_token)
                 prob *= next_prob
                 if len(word) >= max_len:
                     word.append(self.EOS_token)
-            yield ''.join(w for w in word if w not in [self.SOS_token, self.EOS_token]), -1/math.log(prob)
-    
-    def compare_likelihood(self, data1, data2):
-        probs1 = sum([self.get_single_probability(w) for w in data1])
-        probs2 = sum([self.get_single_probability(w) for w in data2])
-        likelihood = probs1 / probs2
-        if likelihood > 1:
-            ret = f"Data1 is {likelihood:.2f} times more likely than Data2 under this model"
-        else:
-            ret = f"Data2 is {1/likelihood:.2f} times more likely than Data1 under this model"
-        return ret
+            word = [w for w in word if w not in [self.SOS_token, self.EOS_token]]
+            yield ''.join(word), -1/math.log(prob)
     
     def __len__(self):
         return len(self.ngrams)
     
     def __str__(self):
         return f"<{self.n}-gram model(size={len(self)})>"
-    
-    
-idxs = int(len(eng_words) * 0.8)
-
-eng_train = eng_words[:idxs]
-eng_test = eng_words[idxs:]
-
-model = CharNGram(eng_train, 2)
-
-for word, prob in model.generate_words(10):
-    print(word, prob)
-# df = model.to_df()
