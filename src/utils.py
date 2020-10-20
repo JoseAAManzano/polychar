@@ -16,7 +16,6 @@ import torch
 import string
 import numpy as np
 import pandas as pd
-import torch.nn.functional as F
 
 from itertools import product
 from collections import Counter
@@ -76,19 +75,6 @@ def compute_lang_accuracy(y_pred, y_target):
     n_correct = torch.eq(preds > 0.5, y_target).sum().item()
     return n_correct / len(preds) * 100
 
-def compute_accuracy(y_pred, y_true, mask_index):
-    y_pred, y_true = normalize_sizes(y_pred, y_true)
-
-    _, y_pred_indices = y_pred.max(dim=1)
-    
-    correct_indices = torch.eq(y_pred_indices, y_true).float()
-    valid_indices = torch.ne(y_true, mask_index).float()
-    
-    n_correct = (correct_indices * valid_indices).sum().item()
-    n_valid = valid_indices.sum().item()
-
-    return n_correct / n_valid * 100
-
 def normalize_sizes(y_pred, y_true):
     """Normalize tensor sizes
     
@@ -103,6 +89,19 @@ def normalize_sizes(y_pred, y_true):
     if len(y_true.size()) == 2:
         y_true = y_true.contiguous().view(-1)
     return y_pred, y_true
+
+def compute_accuracy(y_pred, y_true, mask_index):
+    y_pred, y_true = normalize_sizes(y_pred, y_true)
+
+    _, y_pred_indices = y_pred.max(dim=1)
+    
+    correct_indices = torch.eq(y_pred_indices, y_true).float()
+    valid_indices = torch.ne(y_true, mask_index).float()
+    
+    n_correct = (correct_indices * valid_indices).sum().item()
+    n_valid = valid_indices.sum().item()
+
+    return n_correct / n_valid * 100
 
 def print_state_dict(train_state):
     print((f"Epoch: {train_state['epoch_idx'] + 1} | "
@@ -591,12 +590,10 @@ class CharNGram(object):
         def is_plausible(permutation):
             if self.SOS_token not in permutation and \
                 self.EOS_token not in permutation: return True
-            if self.SOS_token in permutation and\
-                self.EOS_token in permutation: return False
             n = len(permutation)
             
-            if self.EOS_token in permutation[:-1]: return False
-            if self.SOS_token in permutation[1:]: return False
+            if self.EOS_token in permutation[0]: return False
+            if self.SOS_token in permutation[-1]: return False
             flg = False
             cnt = 0
             for i in range(n-1, -1, -1):
@@ -702,10 +699,8 @@ class CharNGram(object):
         n = len(word)
         prob = 0.0 if log else 1.0
         for ngram in self._split_word(word, self.n):
-            if ngram not in self.model.keys():
-                n -= 1
+            if ngram not in self.model:
                 print(ngram)
-                continue
             p = self.model[ngram]
             if log:
                 prob += math.log(p)
@@ -723,7 +718,7 @@ class CharNGram(object):
         the probabilties are log-transformed and the final score is then
         exponentiated. Thus:
             
-            Perplexity = exp(-(1/N) * sum(probs))
+            Perplexity = exp(-(sum(probs)/N)) ~ exp(NLL/N)
         
         where N is the number of words and probs is the vector of probabilities
         for each word in the dataset.
@@ -741,9 +736,9 @@ class CharNGram(object):
         
         probs = 0.0
         for word in test_tokens:
-            probs += self.get_single_probability(word, log=True)
+            probs -= self.get_single_probability(word, log=True)
         
-        return math.exp((-1/N) * probs)
+        return math.exp(probs/N)
     
     def get_distribution_from_context(self, context):
         """Get the multinomial distribution for the next character given a
@@ -768,10 +763,20 @@ class CharNGram(object):
     
     def calculate_accuracy(self, wordlist, topk=1):
         N = len(wordlist)
+        total_acc = 0.0
         for word in wordlist:
-            for ngram in self._split_words(word, self.n):
-                
-        
+            acc = 0.0
+            padded_word = self.process_word(word, self.n)
+            for i, ngram in enumerate(self._split_word(padded_word, self.n)):
+                if i+self.n >= len(padded_word):
+                    break
+                dist = self.get_distribution_from_context(ngram)
+                topl = [k for k,_ in sorted(dist.items(),
+                                              key=lambda x:x[1],
+                                              reverse=True)]
+                acc += 1 if padded_word[i+self.n] in topl[:topk] else 0
+            total_acc += (acc / (len(word)+1))
+        return total_acc * 100 / N
     
     def _next_candidate(self, prev, without=[]):
         """Private method to select next candidate from previous context
@@ -809,8 +814,7 @@ class CharNGram(object):
             while word[-1] != self.EOS_token:
                 prev = () if self.n == 1 else tuple(word[-self.n+1:])
                 blacklist = [self.EOS_token] if len(word) < min_len else []
-                next_token, next_prob = self._best_candidate(prev,
-                                                             i,
+                next_token, next_prob = self._next_candidate(prev,
                                                              without=blacklist
                                                              )
                 word.append(next_token)
@@ -828,7 +832,7 @@ class CharNGram(object):
         return f"<{self.n}-gram model(size={len(self)})>"
 
 #%% Trie
-def TrieNode(object):
+class TrieNode(object):
     """Node for the Trie class"""
     def __init__(self, vocab_len=27):
         """
@@ -841,7 +845,7 @@ def TrieNode(object):
         self.prefix = ''
         self.cnt = 0
         
-def Trie(object):
+class Trie(object):
     """Trie (pronounced "try") or prefix tree is a tree data structure,
     which is used for retrieval of a key in a dataset of strings.
     """
@@ -913,9 +917,9 @@ def Trie(object):
             curr = curr.children[i]
         return True
     
-    def get_probabilities(self, node):
+    def get_probabilities(self):
         """Calculates the probability of different prefixes"""
-        curr = node
+        curr = self.root
         total = curr.cnt
         
         for i in range(self.vocab_len):

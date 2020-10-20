@@ -51,3 +51,47 @@ class PolyChar(nn.Module):
     def initHidden(self, batch_size, device):
         return (torch.zeros(self.n_layers, batch_size, self.n_hidden).to(device),
                 torch.zeros(self.n_layers, batch_size, self.n_hidden).to(device))
+    
+class PolyChar2(nn.Module):
+    def __init__(self, n_in, n_hidden, n_layers, n_out, drop_p=0.1):
+        super(PolyChar2, self).__init__()
+        self.drop_p = drop_p
+        self.n_hidden = n_hidden
+        self.n_layers = n_layers
+        self.n_out = n_out
+        
+        self.lstm = nn.LSTM(
+            input_size=n_in,
+            hidden_size=n_hidden,
+            num_layers=n_layers,
+            dropout=drop_p,
+            batch_first=True
+            )
+        self.fc = nn.Linear(n_hidden, n_out)
+        # Predict language class after every letter
+        # self.lang_pred = nn.Linear(n_hidden, 1) 
+        
+    def forward(self, x, hidden, apply_sig=False, apply_sfmx=False):
+        out, hidden = self.lstm(x, hidden)
+        
+        # # Reshape output
+        batch_size, seq_size, n_hidden = out.shape
+        out1 = out.contiguous().view(batch_size*seq_size, n_hidden)
+
+        chars_out = self.fc(F.dropout(out1, p=self.drop_p))
+        
+        # # Get last hidden state for prediction
+        # l_pred = out[:, -1] # Shape = [batch_size, n_hidden]
+        # l_pred = self.lang_pred(F.dropout(l_pred, p=self.drop_p))
+    
+        if apply_sfmx:
+            chars_out = F.softmax(chars_out, dim=1)
+            
+        # if apply_sig:
+        #     l_pred = F.sigmoid(l_pred)
+        
+        return chars_out.view(batch_size, seq_size, self.n_out), hidden
+        
+    def initHidden(self, batch_size, device):
+        return (torch.zeros(self.n_layers, batch_size, self.n_hidden).to(device),
+                torch.zeros(self.n_layers, batch_size, self.n_hidden).to(device))
