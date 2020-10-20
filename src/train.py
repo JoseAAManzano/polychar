@@ -14,13 +14,13 @@ from argparse import Namespace
 
 #%% Set-up paramenters
 args = Namespace(
-    csv='../processed_data/ESP-ENG.csv',
+    csv='../processed_data/ESP-EUS.csv',
     vectorizer_file="../processed_data/vectorizer.json",
     model_checkpoint_file='/models/checkpoints/',
-    model_save_file='models/bil_50-50.pt',
+    model_save_file='models/ESEU_50-50.pt',
     hidden_dim=128,
     n_lstm_layers=1,
-    n_epochs=50,
+    n_epochs=30,
     learning_rate=0.001,
     batch_size=64,
     device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu'),

@@ -45,7 +45,7 @@ def generate_batches(dataset, batch_size, shuffle=True,
     for data_dict in dataloader:
         out_data_dict = {}
         for name, tensor in data_dict.items():
-            out_data_dict[name] = data_dict[name].to(device)
+            out_data_dict[name] = tensor.to(device)
         yield out_data_dict
         
 def set_all_seeds(seed, device):
@@ -657,10 +657,10 @@ class CharNGram(object):
         """Reads model from a tab separated txt file"""
         with open(filepath, 'r') as file:
             data = file.readlines()
-        model = Counter()
+        self.model = Counter()
         for ngram, value in data.split('\t'):
-            model[tuple(ngram.split(' '))] = value
-        return model
+            self.model[tuple(ngram.split(' '))] = value
+        self.n = len(self.model.keys()[0])
     
     def to_df(self):
         """Creates a DataFrame from Counter of ngrams
