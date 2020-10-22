@@ -15,7 +15,6 @@ import collections
 
 from argparse import Namespace 
 from sklearn.manifold import TSNE
-from sklearn.decomposition import PCA
 
 #%% Helper
 def get_acc(model, vectorizer, data, device):
@@ -37,8 +36,8 @@ def get_acc(model, vectorizer, data, device):
 
 def get_hidden_representation(model, vectorizer, df, device):
     ret = pd.DataFrame()
-    model.eval()
     words = df.data
+    model.eval()
     for i, word in enumerate(words):
         from_v, to_v = vectorizer.vectorize(word)
         from_v, to_v = from_v.to(device), to_v.to(device)
@@ -145,17 +144,17 @@ for data, model in zip(args.datafiles, args.modelfiles):
         
         results = pd.concat([results, pd.DataFrame(tmp)], axis=0)
         
-sns.catplot(x="prob", y="accuracy", hue="model", col="data", kind='point',
+sns.catplot(x="prob", y="accuracy", hue="model", row="data", kind='point',
             data=results, palette="Reds")
 
-sns.catplot(x="prob", y="perplexity", hue="model", col="data", kind='point',
+sns.catplot(x="prob", y="perplexity", hue="model", row="data", kind='point',
             data=results, palette="Reds")
 
 exp_data = results[['model', 'prob', 'data', 'ES-', 'ES+']]
 exp_data = pd.melt(exp_data, id_vars=['model', 'prob', 'data'],
                    value_vars=['ES-', 'ES+'])
 
-sns.catplot(x="prob", y="value", hue="variable", row="model", col="data",
+sns.catplot(x="prob", y="value", hue="variable", row="data", col="model",
             data=exp_data, kind="bar", palette="Reds")
 
 #%% Distribution of last character
@@ -167,33 +166,49 @@ sns.catplot(x="prob", y="value", hue="variable", row="model", col="data",
 #%% Separation of langauges in hidden layers
 hidden_repr = pd.DataFrame()
 
-for data, model in zip(args.datafiles, args.modelfiles):
-    end = f"{int(0.5*100)}-{int((1-0.5)*100)}"
-    m_name = f"{model}{end}"
-    print(f"{data}: {m_name}")
-    
-    dataset = utils.TextDataset.load_dataset_and_make_vectorizer(
-            args.csv + data,
-            p=0.5, seed=args.seed)
-    vectorizer = dataset.get_vectorizer()
-    
-    test_df = dataset.test_df
-    
-    lstm_model = torch.load(args.model_save_file + m_name + ".pt")
-    
-    tsne = TSNE(n_components=2, n_jobs=-1, random_state=args.seed)
-    
-    repr_df = get_hidden_representation(lstm_model, vectorizer,
-                                        test_df, args.device)
-    
-    
-    repr_df[['tsne1','tsne2']] = tsne.fit_transform(repr_df.iloc[:, 3:])
-    repr_df['dataset'] = data
-    
-    hidden_repr = pd.concat([hidden_repr, repr_df], ignore_index=True)
+eval_repr = pd.DataFrame()
 
-g = sns.FacetGrid(hidden_repr, col="data", hue="label", palette="Reds")
+eval_words.columns = ['data', 'label']
+
+for data, model in zip(args.datafiles, args.modelfiles):
+    for prob in args.probs:
+        end = f"{int(prob*100)}-{int((1-prob)*100)}"
+        m_name = f"{model}{end}"
+        print(f"{data}: {m_name}")
+        
+        dataset = utils.TextDataset.load_dataset_and_make_vectorizer(
+                args.csv + data,
+                p=prob, seed=args.seed)
+        vectorizer = dataset.get_vectorizer()
+        
+        test_df = dataset.test_df
+        
+        lstm_model = torch.load(args.model_save_file + m_name + ".pt")
+        
+        tsne = TSNE(n_components=2, n_jobs=-1, random_state=args.seed)
+        
+        repr_df = get_hidden_representation(lstm_model, vectorizer,
+                                            test_df, args.device)
+        
+        repr_df[['tsne1','tsne2']] = tsne.fit_transform(repr_df.iloc[:, 3:])
+        repr_df['model'] = end
+        repr_df['dataset'] = data
+        
+        hidden_repr = pd.concat([hidden_repr, repr_df], ignore_index=True)
+        
+        eval_df = get_hidden_representation(lstm_model, vectorizer,
+                                            eval_words, args.device)
+        
+        eval_df[['tsne1','tsne2']] = tsne.fit_transform(eval_df.iloc[:, 2:])
+        eval_df['model'] = end
+        eval_df['dataset'] = data
+        
+        eval_repr = pd.concat([eval_repr, eval_df], ignore_index=True)
+        
+g = sns.FacetGrid(hidden_repr, col="model", row="dataset", hue="label")
 g.map(sns.scatterplot, "tsne1", "tsne2", alpha=0.7)
 g.add_legend()
 
-hidden_repr[(hidden_repr.tsne1 <= -40) & (hidden_repr.tsne2 > -50)].data
+g = sns.FacetGrid(eval_repr, col="model", row="dataset", hue="label")
+g.map(sns.scatterplot, "tsne1", "tsne2", alpha=0.7)
+g.add_legend()
