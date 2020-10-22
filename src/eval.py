@@ -8,12 +8,51 @@ Created on Mon Oct 19 13:48:18 2020
 import utils
 import torch
 import math
-import torch.nn as nn
+import torch.nn.functional as F
 import seaborn as sns
 import pandas as pd
 import collections
 
 from argparse import Namespace 
+from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
+
+#%% Helper
+def get_acc(model, vectorizer, data, device):
+    N = len(data)
+    acc = 0.0
+    model.eval()
+    for i, word in enumerate(data):
+        from_v, to_v = vectorizer.vectorize(word)
+        from_v, to_v = from_v.to(device), to_v.to(device)
+        from_v = from_v.unsqueeze(0)
+        
+        hidden = model.initHidden(1, device)
+        
+        out, _ = model(from_v, hidden)
+           
+        acc += utils.compute_accuracy(out, to_v, vectorizer.data_vocab.PAD_idx)
+        
+    return acc / N
+
+def get_hidden_representation(model, vectorizer, df, device):
+    ret = pd.DataFrame()
+    model.eval()
+    words = df.data
+    for i, word in enumerate(words):
+        from_v, to_v = vectorizer.vectorize(word)
+        from_v, to_v = from_v.to(device), to_v.to(device)
+        from_v = from_v.unsqueeze(0)
+        
+        hidden = model.initHidden(1, device)
+        
+        out, hidden = model(from_v, hidden)
+        
+        ret[word] = torch.flatten(hidden[0].detach()).to('cpu').numpy()
+    ret = ret.T
+    ret['data'] = ret.index
+    
+    return df.merge(ret, on='data')
 
 #%% Set-up paramenters
 args = Namespace(
@@ -32,6 +71,11 @@ utils.set_all_seeds(args.seed, args.device)
 
 #%% Set-up experiments
 results = pd.DataFrame()
+results_similarity = pd.DataFrame()
+
+eval_words = pd.read_csv(args.csv + 'exp_words.csv')
+es0_words = list(eval_words[eval_words.condition == 'ES-']['word'])
+es1_words = list(eval_words[eval_words.condition == 'ES+']['word'])
 
 for data, model in zip(args.datafiles, args.modelfiles):
     for prob in args.probs:
@@ -41,14 +85,14 @@ for data, model in zip(args.datafiles, args.modelfiles):
         
         dataset = utils.TextDataset.load_dataset_and_make_vectorizer(
             args.csv + data,
-            p=prob)
+            p=prob, seed=args.seed)
         vectorizer = dataset.get_vectorizer()
         
         train_words = list(dataset.train_df.data)
-        test_words = list(dataset.train_df.data)
+        test_words = list(dataset.test_df.data)
         
         ngrams = {}
-        for n in range(2, 5):
+        for n in range(2, 6):
             ngrams[f"{n}-gram"] = utils.CharNGram(train_words, n)
                 
         tmp = collections.defaultdict(list)
@@ -59,6 +103,8 @@ for data, model in zip(args.datafiles, args.modelfiles):
             tmp["data"].append(model[:-1])
             tmp["accuracy"].append(m.calculate_accuracy(test_words))
             tmp["perplexity"].append(m.perplexity(test_words))
+            tmp["ES+"].append(m.calculate_accuracy(es1_words))
+            tmp["ES-"].append(m.calculate_accuracy(es0_words))
         
         dataset.set_split('test')
         batch_generator = utils.generate_batches(dataset, 
@@ -70,7 +116,6 @@ for data, model in zip(args.datafiles, args.modelfiles):
         
         acc = 0.0
         perp = 0.0
-        loss = nn.CrossEntropyLoss(ignore_index=vectorizer.data_vocab.PAD_idx)
         
         for batch_id, batch_dict in enumerate(batch_generator):
             hidden = lstm_model.initHidden(args.batch_size, args.device)
@@ -80,7 +125,11 @@ for data, model in zip(args.datafiles, args.modelfiles):
             acc_chars = utils.compute_accuracy(out,
                                    batch_dict['Y'],
                                    vectorizer.data_vocab.PAD_idx)
-            perp_chars = loss(*utils.normalize_sizes(out, batch_dict['Y']))
+            perp_chars = F.cross_entropy(*utils.normalize_sizes(
+                                out,
+                                batch_dict['Y']),
+                                ignore_index=vectorizer.data_vocab.PAD_idx
+                                )
             acc += (acc_chars - acc) / (batch_id + 1)
             perp += (perp_chars.item() - perp) / (batch_id + 1)
             
@@ -89,6 +138,10 @@ for data, model in zip(args.datafiles, args.modelfiles):
         tmp["data"].append(model[:-1])
         tmp["accuracy"].append(acc)
         tmp["perplexity"].append(math.exp(perp))
+        tmp["ES-"].append(get_acc(lstm_model, vectorizer,
+                                  es0_words, args.device))
+        tmp["ES+"].append(get_acc(lstm_model, vectorizer,
+                                  es1_words, args.device))
         
         results = pd.concat([results, pd.DataFrame(tmp)], axis=0)
         
@@ -98,30 +151,49 @@ sns.catplot(x="prob", y="accuracy", hue="model", col="data", kind='point',
 sns.catplot(x="prob", y="perplexity", hue="model", col="data", kind='point',
             data=results, palette="Reds")
 
-#%% Compare distribution of last character in test words
+exp_data = results[['model', 'prob', 'data', 'ES-', 'ES+']]
+exp_data = pd.melt(exp_data, id_vars=['model', 'prob', 'data'],
+                   value_vars=['ES-', 'ES+'])
+
+sns.catplot(x="prob", y="value", hue="variable", row="model", col="data",
+            data=exp_data, kind="bar", palette="Reds")
+
+#%% Distribution of last character
+# TODO Compare distribution of last character in test words
 # Create a list of distributions for each word [len(test_words), len(vocab)]
-# Average the KL divergence/other distance metric over all the words in test set
+# Average the KL divergence/other distance metric over all the words in test
 # Plot
-test_words_pad = [list(word) + ["</s>"] for word in test_words]
-
-trie = utils.Trie()
-trie.insert_many(test_words_pad)
-
-def calculate_empirical_distribution(trie):
-    """Calculates empirical distribution for the entire Trie"""
-    q = []
-    q.append(trie.root)
-    while q:
-        p = []
-        curr = q.pop()
-        cnt = 0
-        for i in range(trie.vocab_len):
-            if curr.children[i]:
-                q.append(curr.children[i])
-                p.append(curr.children[i].prob)
-            else:
-                cnt += 1
-                p.append(0)
 
 #%% Separation of langauges in hidden layers
+hidden_repr = pd.DataFrame()
 
+for data, model in zip(args.datafiles, args.modelfiles):
+    end = f"{int(0.5*100)}-{int((1-0.5)*100)}"
+    m_name = f"{model}{end}"
+    print(f"{data}: {m_name}")
+    
+    dataset = utils.TextDataset.load_dataset_and_make_vectorizer(
+            args.csv + data,
+            p=0.5, seed=args.seed)
+    vectorizer = dataset.get_vectorizer()
+    
+    test_df = dataset.test_df
+    
+    lstm_model = torch.load(args.model_save_file + m_name + ".pt")
+    
+    tsne = TSNE(n_components=2, n_jobs=-1, random_state=args.seed)
+    
+    repr_df = get_hidden_representation(lstm_model, vectorizer,
+                                        test_df, args.device)
+    
+    
+    repr_df[['tsne1','tsne2']] = tsne.fit_transform(repr_df.iloc[:, 3:])
+    repr_df['dataset'] = data
+    
+    hidden_repr = pd.concat([hidden_repr, repr_df], ignore_index=True)
+
+g = sns.FacetGrid(hidden_repr, col="data", hue="label", palette="Reds")
+g.map(sns.scatterplot, "tsne1", "tsne2", alpha=0.7)
+g.add_legend()
+
+hidden_repr[(hidden_repr.tsne1 <= -40) & (hidden_repr.tsne2 > -50)].data

@@ -90,7 +90,7 @@ def normalize_sizes(y_pred, y_true):
         y_true = y_true.contiguous().view(-1)
     return y_pred, y_true
 
-def compute_accuracy(y_pred, y_true, mask_index):
+def compute_accuracy(y_pred, y_true, mask_index=None):
     y_pred, y_true = normalize_sizes(y_pred, y_true)
 
     _, y_pred_indices = y_pred.max(dim=1)
@@ -354,7 +354,7 @@ class Vectorizer(object):
 #%% TextDataset class
 class TextDataset(Dataset):
     """Combines Vocabulary and Vectorizer classes into one easy interface"""
-    def __init__(self, df, vectorizer, p=None):
+    def __init__(self, df, vectorizer, p=None, seed=None):
         """
         Args:
             df (pandas.DataFrame): the dataset
@@ -374,7 +374,8 @@ class TextDataset(Dataset):
                 p = [p, 1-p]
             for frac, l in zip(p, labs):
                 dat = self.train_df[self.train_df.label == l]
-                tmp = pd.concat([tmp, dat.sample(frac=frac)])
+                tmp = pd.concat([tmp, dat.sample(frac=frac,
+                                                 random_state=seed)])
             self.train_df = tmp
         self.train_size = len(self.train_df)
         
@@ -403,7 +404,8 @@ class TextDataset(Dataset):
         self.label_weights = 1.0 / torch.tensor(freqs, dtype=torch.float32)
         
     @classmethod
-    def load_dataset_and_make_vectorizer(cls, csv, split="char", p=None):
+    def load_dataset_and_make_vectorizer(cls, csv, split="char", p=None,
+                                         seed=None):
         """Loads a pandas DataFrame and makes Vectorizer from scratch
         
         DataFrame should have following named columns:
@@ -420,24 +422,7 @@ class TextDataset(Dataset):
         """
         df = pd.read_csv(csv)
         train_df = df[df.split=='train']
-        return cls(df, Vectorizer.from_df(train_df, split=split), p)
-    
-    @classmethod
-    def load_dataset_and_load_vectorizer(cls, csv, vectorizer_path):
-        """Load dataset and the corresponding vectorizer. 
-        
-        Used in the case in the vectorizer has been stored for re-use
-        
-        Args:
-            csv (str): path to the dataset
-            vectorizer_path (str): path to the saved vectorizer
-        Returns:
-            Instance of TextDataset
-        """
-        df = pd.read_csv(csv)
-        with open(vectorizer_path) as f:
-            vectorizer = Vectorizer.from_dict(json.load(f))
-        return cls(df, vectorizer)
+        return cls(df, Vectorizer.from_df(train_df, split=split), p, seed)
     
     def save_vectorizer(self, vectorizer_path):
         """Saves vectorizer in json format
