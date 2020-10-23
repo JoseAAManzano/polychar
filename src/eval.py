@@ -18,7 +18,6 @@ from sklearn.manifold import TSNE
 
 #%% Helper
 def get_acc(model, vectorizer, data, device):
-    N = len(data)
     acc = 0.0
     model.eval()
     for i, word in enumerate(data):
@@ -29,10 +28,12 @@ def get_acc(model, vectorizer, data, device):
         hidden = model.initHidden(1, device)
         
         out, _ = model(from_v, hidden)
-           
-        acc += utils.compute_accuracy(out, to_v, vectorizer.data_vocab.PAD_idx)
+          
+        char_acc = utils.compute_accuracy(out, to_v,
+                                          vectorizer.data_vocab.PAD_idx)
+        acc += (char_acc - acc) / (i+1)
         
-    return acc / N
+    return acc
 
 def get_hidden_representation(model, vectorizer, df, device):
     ret = pd.DataFrame()
