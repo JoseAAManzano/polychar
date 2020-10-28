@@ -195,7 +195,6 @@ sns.catplot(x="prob", y="accuracy_train", hue="model", row="data", kind='point',
 sns.catplot(x="prob", y="perplexity_train", hue="model", row="data", kind='point',
             data=results, palette="Reds")
 
-
 exp_data = results[['model', 'prob', 'data', 'run', 'ES-', 'ES+']]
 exp_data = pd.melt(exp_data, id_vars=['model', 'prob', 'data', 'run'],
                    value_vars=['ES-', 'ES+'])
@@ -208,6 +207,11 @@ sns.catplot(x="prob", y="value", hue="variable", row="data", col="model",
 # Create a list of distributions for each word [len(test_words), len(vocab)]
 # Average the KL divergence/other distance metric over all the words in test
 # Plot
+
+#%% Hidden representation for each time-point for each word
+
+
+
 
 
 # TODO use other clustering to see model representation
