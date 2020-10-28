@@ -12,9 +12,12 @@ import torch.nn.functional as F
 import seaborn as sns
 import pandas as pd
 import collections
+import json
 
 from argparse import Namespace 
 from sklearn.manifold import TSNE
+from datetime import datetime
+from collections import defaultdict
 
 #%% Helper
 def get_acc(model, vectorizer, data, device):
@@ -209,13 +212,15 @@ sns.catplot(x="prob", y="value", hue="variable", row="data", col="model",
 # Plot
 
 #%% Hidden representation for each time-point for each word
+# First is necessary to run the readout.py file to produce the representations
+hidd_cols = [str(i) for i in range(args.hidden_dim)]
+tmp = pd.read_json(f"{args.save_file}/ESEN_50-50_0.json", encoding='utf-8')
+tmp[hidd_cols] = tmp[hidd_cols].astype('float32')
 
 
 
-
-
-# TODO use other clustering to see model representation
 from sklearn import LogisticRegression
+
 
 
 
