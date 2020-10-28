@@ -289,12 +289,33 @@ class Vectorizer(object):
         
         return from_vector, to_vector
     
+    def vectorize_single_char(self, word):
+        """Encodes a word character by character
+        
+        Args:
+            word (str): word to encode
+        Yields:
+            i (int): character position
+            from_vector (torch.Tensor): observation tensor of
+                shape [1, len(data_vocab)]
+            to_vector (torch.Tensor): target prediction tensor of
+                shape [1, 1]
+        """
+        indices = [self.data_vocab.SOS_idx]
+        indices.extend(self.data_vocab.token2idx(c) for c in word)
+        indices.append(self.data_vocab.EOS_idx)
+        
+        for i, (idx1, idx2) in enumerate(zip(indices[:-1], indices[1:])):
+            from_vector = self.onehot([idx1])
+            to_vector = torch.LongTensor([idx2])
+            yield i, (from_vector, to_vector)
+    
     def onehot(self, indices):
         """Encodes a list of indices into a one-hot tensor
         
         Args:
             indices (List[int]): list of indices to encode
-        Returns
+        Returns:
             onehot (torch.Tensor): one-hot tensor from indices of
                 shape [len(indices), len(data_vocab)]
         """
@@ -354,7 +375,7 @@ class Vectorizer(object):
 #%% TextDataset class
 class TextDataset(Dataset):
     """Combines Vocabulary and Vectorizer classes into one easy interface"""
-    def __init__(self, df, vectorizer, p=None, seed=None):
+    def __init__(self, df, vectorizer=None, p=None, split="char", seed=None):
         """
         Args:
             df (pandas.DataFrame): the dataset
@@ -364,7 +385,6 @@ class TextDataset(Dataset):
                 Default None
         """
         self.df = df
-        self._vectorizer = vectorizer
         
         self.train_df = self.df[self.df.split=='train']
         if p is not None:
@@ -378,6 +398,11 @@ class TextDataset(Dataset):
                                                  random_state=seed)])
             self.train_df = tmp
         self.train_size = len(self.train_df)
+        
+        if not vectorizer:
+            self._vectorizer = Vectorizer.from_df(self.train_df, split=split)
+        else:
+            self._vectorizer = vectorizer
         
         self.val_df = self.df[self.df.split=='val']
         self.val_size = len(self.val_df)
@@ -421,8 +446,7 @@ class TextDataset(Dataset):
             Instance of TextDataset
         """
         df = pd.read_csv(csv)
-        train_df = df[df.split=='train']
-        return cls(df, Vectorizer.from_df(train_df, split=split), p, seed)
+        return cls(df, p=p,split=split, seed=seed)
     
     def save_vectorizer(self, vectorizer_path):
         """Saves vectorizer in json format
@@ -756,7 +780,7 @@ class CharNGram(object):
                 if i+self.n >= len(padded_word):
                     break
                 dist = self.get_distribution_from_context(ngram)
-                topl = [k for k,_ in sorted(dist.items(),
+                topl = [k for k, _ in sorted(dist.items(),
                                               key=lambda x:x[1],
                                               reverse=True)]
                 acc += 1 if padded_word[i+self.n] in topl[:topk] else 0

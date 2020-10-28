@@ -61,13 +61,13 @@ args = Namespace(
     model_save_file='models/',
     datafiles = ['ESP-ENG.csv', 'ESP-EUS.csv'],
     modelfiles = ['ESEN_', 'ESEU_'],
-    probs = [0.01, 0.3, 0.5, 0.7, 0.99],
+    probs = [1, 20, 40, 50, 60, 80, 99],
+    n_runs = 5,
+    hidden_dim=128,
     batch_size=256,
     device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu'),
     seed=404
     )
-
-utils.set_all_seeds(args.seed, args.device)
 
 #%% Set-up experiments
 results = pd.DataFrame()
@@ -77,73 +77,111 @@ eval_words = pd.read_csv(args.csv + 'exp_words.csv')
 es0_words = list(eval_words[eval_words.condition == 'ES-']['word'])
 es1_words = list(eval_words[eval_words.condition == 'ES+']['word'])
 
-for data, model in zip(args.datafiles, args.modelfiles):
+for data, category in zip(args.datafiles, args.modelfiles):
     for prob in args.probs:
-        end = f"{int(prob*100)}-{int((1-prob)*100)}"
-        m_name = f"{model}{end}"
-        print(f"{data}: {m_name}")
+        end = f"{prob:02}-{100-prob:02}"
+        m_name = f"{category}{end}"
         
         dataset = utils.TextDataset.load_dataset_and_make_vectorizer(
-            args.csv + data,
-            p=prob, seed=args.seed)
+                args.csv + data,
+                p=prob/100, seed=args.seed)
         vectorizer = dataset.get_vectorizer()
         
         train_words = list(dataset.train_df.data)
         test_words = list(dataset.test_df.data)
         
-        ngrams = {}
-        for n in range(2, 6):
-            ngrams[f"{n}-gram"] = utils.CharNGram(train_words, n)
-                
         tmp = collections.defaultdict(list)
         
-        for name, m in ngrams.items():
-            tmp["model"].append(name)
+        for run in range(args.n_runs):
+            print(f"\n{data}: {m_name}_{run}\n")   
+            
+            # Get N-gram models with different laplace constant
+            ngrams = {}
+            for n in range(2, 5):
+                ngrams[f"{n}-gram"] = utils.CharNGram(train_words, n,
+                                                      laplace=(run+1)*0.2)
+            
+            for name, m in ngrams.items():
+                tmp["model"].append(name)
+                tmp["prob"].append(end)
+                tmp["data"].append(category[:-1])
+                tmp["run"].append(run)
+                tmp["accuracy_train"].append(m.calculate_accuracy(train_words))
+                tmp["perplexity_train"].append(m.perplexity(train_words))
+                tmp["accuracy"].append(m.calculate_accuracy(test_words))
+                tmp["perplexity"].append(m.perplexity(test_words))
+                tmp["ES+"].append(m.calculate_accuracy(es1_words))
+                tmp["ES-"].append(m.calculate_accuracy(es0_words))
+            
+            lstm_model = torch.load(args.model_save_file +\
+                                    f"{m_name}/{m_name}_{run}.pt")
+            lstm_model.eval()
+            lstm_model.to(args.device)
+            
+            dataset.set_split('train')
+            batch_generator = utils.generate_batches(dataset, 
+                                       batch_size=args.batch_size, 
+                                       device=args.device)
+            
+            acc = 0.0
+            perp = 0.0
+            
+            for batch_id, batch_dict in enumerate(batch_generator):
+                hidden = lstm_model.initHidden(args.batch_size, args.device)
+                
+                out, hidden = lstm_model(batch_dict['X'], hidden)
+                
+                acc_chars = utils.compute_accuracy(out,
+                                       batch_dict['Y'],
+                                       vectorizer.data_vocab.PAD_idx)
+                perp_chars = F.cross_entropy(*utils.normalize_sizes(
+                                    out,
+                                    batch_dict['Y']),
+                                    ignore_index=vectorizer.data_vocab.PAD_idx
+                                    )
+                acc += (acc_chars - acc) / (batch_id + 1)
+                perp += (perp_chars.item() - perp) / (batch_id + 1)
+            
+            tmp["model"].append("LSTM")
             tmp["prob"].append(end)
-            tmp["data"].append(model[:-1])
-            tmp["accuracy"].append(m.calculate_accuracy(test_words))
-            tmp["perplexity"].append(m.perplexity(test_words))
-            tmp["ES+"].append(m.calculate_accuracy(es1_words))
-            tmp["ES-"].append(m.calculate_accuracy(es0_words))
-        
-        dataset.set_split('test')
-        batch_generator = utils.generate_batches(dataset, 
-                                   batch_size=args.batch_size, 
-                                   device=args.device)
-        
-        lstm_model = torch.load(args.model_save_file + m_name + ".pt")
-        lstm_model.eval()
-        
-        acc = 0.0
-        perp = 0.0
-        
-        for batch_id, batch_dict in enumerate(batch_generator):
-            hidden = lstm_model.initHidden(args.batch_size, args.device)
+            tmp["data"].append(category[:-1])
+            tmp['run'].append(run)
+            tmp["accuracy_train"].append(acc)
+            tmp["perplexity_train"].append(math.exp(perp))
             
-            out, hidden = lstm_model(batch_dict['X'], hidden)
+            dataset.set_split('test')
+            batch_generator = utils.generate_batches(dataset, 
+                                       batch_size=args.batch_size, 
+                                       device=args.device)
             
-            acc_chars = utils.compute_accuracy(out,
-                                   batch_dict['Y'],
-                                   vectorizer.data_vocab.PAD_idx)
-            perp_chars = F.cross_entropy(*utils.normalize_sizes(
-                                out,
-                                batch_dict['Y']),
-                                ignore_index=vectorizer.data_vocab.PAD_idx
-                                )
-            acc += (acc_chars - acc) / (batch_id + 1)
-            perp += (perp_chars.item() - perp) / (batch_id + 1)
+            acc = 0.0
+            perp = 0.0
             
-        tmp["model"].append("LSTM")
-        tmp["prob"].append(end)
-        tmp["data"].append(model[:-1])
-        tmp["accuracy"].append(acc)
-        tmp["perplexity"].append(math.exp(perp))
-        tmp["ES-"].append(get_acc(lstm_model, vectorizer,
-                                  es0_words, args.device))
-        tmp["ES+"].append(get_acc(lstm_model, vectorizer,
-                                  es1_words, args.device))
-        
-        results = pd.concat([results, pd.DataFrame(tmp)], axis=0)
+            for batch_id, batch_dict in enumerate(batch_generator):
+                hidden = lstm_model.initHidden(args.batch_size, args.device)
+                
+                out, hidden = lstm_model(batch_dict['X'], hidden)
+                
+                acc_chars = utils.compute_accuracy(out,
+                                       batch_dict['Y'],
+                                       vectorizer.data_vocab.PAD_idx)
+                perp_chars = F.cross_entropy(*utils.normalize_sizes(
+                                    out,
+                                    batch_dict['Y']),
+                                    ignore_index=vectorizer.data_vocab.PAD_idx
+                                    )
+                acc += (acc_chars - acc) / (batch_id + 1)
+                perp += (perp_chars.item() - perp) / (batch_id + 1)
+                
+            tmp["accuracy"].append(acc)
+            tmp["perplexity"].append(math.exp(perp))
+            tmp["ES-"].append(get_acc(lstm_model, vectorizer,
+                                      es0_words, args.device))
+            tmp["ES+"].append(get_acc(lstm_model, vectorizer,
+                                      es1_words, args.device))
+            
+        results = pd.concat([results, pd.DataFrame(tmp)], axis=0,
+                            ignore_index=True)
         
 sns.catplot(x="prob", y="accuracy", hue="model", row="data", kind='point',
             data=results, palette="Reds")
@@ -151,8 +189,15 @@ sns.catplot(x="prob", y="accuracy", hue="model", row="data", kind='point',
 sns.catplot(x="prob", y="perplexity", hue="model", row="data", kind='point',
             data=results, palette="Reds")
 
-exp_data = results[['model', 'prob', 'data', 'ES-', 'ES+']]
-exp_data = pd.melt(exp_data, id_vars=['model', 'prob', 'data'],
+sns.catplot(x="prob", y="accuracy_train", hue="model", row="data", kind='point',
+            data=results, palette="Reds")
+
+sns.catplot(x="prob", y="perplexity_train", hue="model", row="data", kind='point',
+            data=results, palette="Reds")
+
+
+exp_data = results[['model', 'prob', 'data', 'run', 'ES-', 'ES+']]
+exp_data = pd.melt(exp_data, id_vars=['model', 'prob', 'data', 'run'],
                    value_vars=['ES-', 'ES+'])
 
 sns.catplot(x="prob", y="value", hue="variable", row="data", col="model",
@@ -164,52 +209,40 @@ sns.catplot(x="prob", y="value", hue="variable", row="data", col="model",
 # Average the KL divergence/other distance metric over all the words in test
 # Plot
 
-#%% Separation of langauges in hidden layers
-hidden_repr = pd.DataFrame()
 
-eval_repr = pd.DataFrame()
+# TODO use other clustering to see model representation
+from sklearn import LogisticRegression
 
-eval_words.columns = ['data', 'label']
 
-for data, model in zip(args.datafiles, args.modelfiles):
-    for prob in args.probs:
-        end = f"{int(prob*100)}-{int((1-prob)*100)}"
-        m_name = f"{model}{end}"
-        print(f"{data}: {m_name}")
-        
-        dataset = utils.TextDataset.load_dataset_and_make_vectorizer(
-                args.csv + data,
-                p=prob, seed=args.seed)
-        vectorizer = dataset.get_vectorizer()
-        
-        test_df = dataset.test_df
-        
-        lstm_model = torch.load(args.model_save_file + m_name + ".pt")
-        
-        tsne = TSNE(n_components=2, n_jobs=-1, random_state=args.seed)
-        
-        repr_df = get_hidden_representation(lstm_model, vectorizer,
-                                            test_df, args.device)
-        
-        repr_df[['tsne1','tsne2']] = tsne.fit_transform(repr_df.iloc[:, 3:])
-        repr_df['model'] = end
-        repr_df['dataset'] = data
-        
-        hidden_repr = pd.concat([hidden_repr, repr_df], ignore_index=True)
-        
-        eval_df = get_hidden_representation(lstm_model, vectorizer,
-                                            eval_words, args.device)
-        
-        eval_df[['tsne1','tsne2']] = tsne.fit_transform(eval_df.iloc[:, 2:])
-        eval_df['model'] = end
-        eval_df['dataset'] = data
-        
-        eval_repr = pd.concat([eval_repr, eval_df], ignore_index=True)
-        
-g = sns.FacetGrid(hidden_repr, col="model", row="dataset", hue="label")
-g.map(sns.scatterplot, "tsne1", "tsne2", alpha=0.7)
-g.add_legend()
 
-g = sns.FacetGrid(eval_repr, col="model", row="dataset", hue="label")
-g.map(sns.scatterplot, "tsne1", "tsne2", alpha=0.7)
-g.add_legend()
+#%% Clustering of hidden representations
+# Can just use the previous dataframe and take the last character for each word
+# Or get RDMs for each character
+        
+#         tsne = TSNE(n_components=2, n_jobs=-1, random_state=args.seed)
+        
+#         repr_df = get_hidden_representation(lstm_model, vectorizer,
+#                                             test_df, args.device)
+        
+#         repr_df[['tsne1','tsne2']] = tsne.fit_transform(repr_df.iloc[:, 3:])
+#         repr_df['model'] = end
+#         repr_df['dataset'] = data
+        
+#         hidden_repr = pd.concat([hidden_repr, repr_df], ignore_index=True)
+        
+#         eval_df = get_hidden_representation(lstm_model, vectorizer,
+#                                             eval_words, args.device)
+        
+#         eval_df[['tsne1','tsne2']] = tsne.fit_transform(eval_df.iloc[:, 2:])
+#         eval_df['model'] = end
+#         eval_df['dataset'] = data
+        
+#         eval_repr = pd.concat([eval_repr, eval_df], ignore_index=True)
+        
+# g = sns.FacetGrid(hidden_repr, col="model", row="dataset", hue="label")
+# g.map(sns.scatterplot, "tsne1", "tsne2", alpha=0.7)
+# g.add_legend()
+
+# g = sns.FacetGrid(eval_repr, col="model", row="dataset", hue="label")
+# g.map(sns.scatterplot, "tsne1", "tsne2", alpha=0.7)
+# g.add_legend()
