@@ -61,6 +61,7 @@ def get_hidden_representation(model, vectorizer, df, device):
 args = Namespace(
     csv='../processed_data/',
     model_checkpoint_file='/models/checkpoints/',
+    save_file='hidden/',
     model_save_file='models/',
     datafiles = ['ESP-ENG.csv', 'ESP-EUS.csv'],
     modelfiles = ['ESEN_', 'ESEU_'],
@@ -213,18 +214,113 @@ sns.catplot(x="prob", y="value", hue="variable", row="data", col="model",
 
 #%% Hidden representation for each time-point for each word
 # First is necessary to run the readout.py file to produce the representations
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.linear_model import LogisticRegression
+from sklearn import metrics as mtr
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+
 hidd_cols = [str(i) for i in range(args.hidden_dim)]
-tmp = pd.read_json(f"{args.save_file}/ESEN_50-50_0.json", encoding='utf-8')
-tmp[hidd_cols] = tmp[hidd_cols].astype('float32')
 
+res = defaultdict(list)
 
+for data, category in zip(args.datafiles, args.modelfiles):
+    for prob in [50, 99]:
+        end = f"{prob:02}-{100-prob:02}"
+        m_name = f"{category}{end}"
+        
+        dataset = pd.DataFrame()
+        for run in range(args.n_runs):
+            tmp = pd.read_json(f"{args.save_file}/{m_name}_{run}.json",
+                               encoding='utf-8')
+            dataset = pd.concat([dataset, tmp], axis=0, ignore_index=True)
+        
+        for run in range(args.n_runs):
+            train_data = dataset[dataset.run == run]
+            for T in range(11):
+                model_data = train_data[train_data.char == T]
+                
+                X = model_data[hidd_cols].values
+                y = model_data.label.values
+                
+                y = LabelEncoder().fit_transform(y)
+                
+                X_train, X_test, y_train, y_test = train_test_split(X, y,
+                                                                    test_size=0.2,
+                                                                    random_state=args.seed,
+                                                                    stratify=y
+                                                                    )
+                sc = StandardScaler()
+                
+                X_train = sc.fit_transform(X_train)
+                X_test = sc.transform(X_test)
+                m = LogisticRegression(max_iter=10e9, random_state=args.seed)
+                m.fit(X_train, y_train)
+                preds = m.predict(X_test)
+                
+                res['dataset'].append(category[:-1])
+                res['prob'].append(end)
+                res['run'].append(run)
+                res['char'].append(T)
+                res['Accuracy'].append(mtr.accuracy_score(y_test, preds))
+                res['F1'].append(mtr.f1_score(y_test, preds))
+                res['ROC_AUC'].append(mtr.roc_auc_score(y_test, preds,
+                                                        average='weighted'))
+            
+                print(f"{m_name}_{run} char-{T}: {mtr.accuracy_score(y_test, preds):.2f}")
 
-from sklearn import LogisticRegression
+res = pd.DataFrame(res)
 
+g = sns.catplot(x='char', y='ROC_AUC', hue='prob', row='dataset',
+                data=res, kind='point', palette='Reds', ci='sd')
+g.map(plt.axhline, y=0.5, ls='--')
 
+g = sns.catplot(x='char', y='Accuracy', hue='prob', row='dataset',
+                data=res, kind='point', palette='Reds', ci='sd')
+g.map(plt.axhline, y=0.5, ls='--')
 
+g = sns.catplot(x='char', y='F1', hue='prob', row='dataset',
+                data=res, kind='point', palette='Reds', ci='sd')
+g.set(ylim=(0,1))
 
 #%% Clustering of hidden representations
+from scipy.spatial import distance
+import numpy as np
+from matplotlib.colors import Normalize
+
+hidd_cols = [str(i) for i in range(args.hidden_dim)]
+
+for data, category in zip(args.datafiles, args.modelfiles):
+    for prob in [50, 99]:
+        end = f"{prob:02}-{100-prob:02}"
+        m_name = f"{category}{end}"
+        
+        dataset = pd.DataFrame()
+        for run in range(args.n_runs):
+            tmp = pd.read_json(f"{args.save_file}/{m_name}_{run}.json",
+                               encoding='utf-8')
+            dataset = pd.concat([dataset, tmp], axis=0, ignore_index=True)
+        
+        dataset['len'] = dataset.word.map(len)
+        
+                
+        rdm_data = dataset[(dataset.char == 5) & (dataset.run == 1)]
+        rdm_data = rdm_data.sort_values(by='label')
+        ticks = list(rdm_data.label)
+                    
+        rdm_data = np.array(rdm_data[hidd_cols].values)
+        rdm_data = (rdm_data - rdm_data.mean()) / rdm_data.std()
+        
+        RDM = distance.squareform(distance.pdist(rdm_data, 'euclidean'))
+        RDM = (RDM - RDM.min()) / (RDM.max() - RDM.min())
+        
+        plt.figure()
+        plt.imshow(RDM, cmap='coolwarm')
+        plt.axis('off')
+        plt.title(f"Standardized euclidean distance {m_name}_{0}_5")
+        plt.colorbar()
+        plt.show()
+
 # Can just use the previous dataframe and take the last character for each word
 # Or get RDMs for each character
         

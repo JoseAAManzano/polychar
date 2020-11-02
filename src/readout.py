@@ -39,7 +39,7 @@ except:
 
 #%% Hidden representation for each time-point for each word
 for data, category in zip(args.datafiles, args.modelfiles):
-    for prob in [50, 99]: # Use only full bilingual and monolingual models
+    for prob in args.probs:
         end = f"{prob:02}-{100-prob:02}"
         m_name = f"{category}{end}"
         
