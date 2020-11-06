@@ -55,7 +55,9 @@ for data, category in zip(args.datafiles, args.modelfiles):
             print(f"\n{data}: {m_name}_{run}\n")
             cols = ['dataset','prob','run','word','label','char']
             hidd_cols = [str(i) for i in range(args.hidden_dim)]
-            tmp = defaultdict(list)
+            
+            hidd = defaultdict(list)
+            cell = defaultdict(list)
             
             model = torch.load(args.model_save_file +\
                                     f"{m_name}/{m_name}_{run}.pt")
@@ -67,18 +69,30 @@ for data, category in zip(args.datafiles, args.modelfiles):
                 for i, (f_v, t_v) in vectorizer.vectorize_single_char(w):
                     f_v, t_v = f_v.to(args.device), t_v.to(args.device)
                     _, hidden = model(f_v.unsqueeze(1), hidden)
-                    tmp['dataset'].append(category[:-1])
-                    tmp['prob'].append(end)
-                    tmp['run'].append(run)
-                    tmp['char'].append(i)
-                    tmp['word'].append(w)
-                    tmp['label'].append(l)
+                    hidd['dataset'].append(category[:-1])
+                    hidd['prob'].append(end)
+                    hidd['run'].append(run)
+                    hidd['char'].append(i)
+                    hidd['word'].append(w)
+                    hidd['label'].append(l)
                     hid = torch.flatten(hidden[0].detach()).to('cpu').numpy()
                     for k, v in zip(hidd_cols, hid):
-                        tmp[k].append(str(v))
+                        hidd[k].append(str(v))
+                    cell['dataset'].append(category[:-1])
+                    cell['prob'].append(end)
+                    cell['run'].append(run)
+                    cell['char'].append(i)
+                    cell['word'].append(w)
+                    cell['label'].append(l)
+                    cel = torch.flatten(hidden[1].detach()).to('cpu').numpy()
+                    for k, v in zip(hidd_cols, cel):
+                        cell[k].append(str(v))
 
-            with open(f"{args.save_file}/{m_name}_{run}.json", 'w',
+            with open(f"{args.save_file}/hidden_{m_name}_{run}.json", 'w',
                       encoding='utf-8') as f:
-                json.dump(tmp, f)
+                json.dump(hidd, f)
+            with open(f"{args.save_file}/cell_{m_name}_{run}.json", 'w',
+                  encoding='utf-8') as f:
+                json.dump(hidd, f)
             print(f"{(datetime.now() - t0).seconds}s")
 

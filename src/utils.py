@@ -55,19 +55,17 @@ def set_all_seeds(seed, device):
     if device == torch.device('cuda:0'):
         torch.cuda.manual_seed_all(seed)
         
-def make_train_state(args):
+def make_train_state():
     return {
-        'learning_rate': args.learning_rate,
         'epoch_idx': 0,
+        'early_stopping_step':0,
+        'early_stopping_best_val': 1e10,
         'train_loss': [],
         'train_acc': [],
-        'train_lang_acc': [],
         'val_loss': [],
         'val_acc': [],
-        'val_lang_acc': [],
         'test_loss': -1,
         'test_acc': -1,
-        'test_lang_acc': -1,
         }
 
 def compute_lang_accuracy(y_pred, y_target):
@@ -104,14 +102,22 @@ def compute_accuracy(y_pred, y_true, mask_index=None):
     return n_correct / n_valid * 100
 
 def print_state_dict(train_state):
-    print((f"Epoch: {train_state['epoch_idx'] + 1} | "
-           f"train_loss: {train_state['train_loss'][-1]:.4f} | "
-           f"val_loss: {train_state['val_loss'][-1]:.4f}\n"
-           f"train_acc_chars: {train_state['train_acc'][-1]:.2f} | "
-           # f"train_acc_lang: {train_state['train_lang_acc'][-1]:.2f}\n"
-           f"val_acc_chars: {train_state['val_acc'][-1]:.2f} | "
-           # f"val_acc_lang: {train_state['val_lang_acc'][-1]:.2f}\n"
-           ))
+    for k, v in train_state.items():
+        if isinstance(v, list):
+            print(f"{k}: {v[-1]:.2f}")
+        elif isinstance(v, float):
+            print(f"{k}: {v:.2f}")            
+        else:
+            print(f"{k}: {v}")
+    
+    # print((f"Epoch: {train_state['epoch_idx'] + 1} | "
+    #        f"train_loss: {train_state['train_loss'][-1]:.4f} | "
+    #        f"val_loss: {train_state['val_loss'][-1]:.4f}\n"
+    #        f"train_acc_chars: {train_state['train_acc'][-1]:.2f} | "
+    #        # f"train_acc_lang: {train_state['train_lang_acc'][-1]:.2f}\n"
+    #        f"val_acc_chars: {train_state['val_acc'][-1]:.2f} | "
+    #        # f"val_acc_lang: {train_state['val_lang_acc'][-1]:.2f}\n"
+    #        ))
     
 def sample_from_model(model, vectorizer, num_samples=1, sample_size=10,
                       temp=1.0, device='cpu'):
@@ -230,8 +236,6 @@ class Vectorizer(object):
     """
     The Vectorizer creates one-hot vectors from sequence of characters/words
     stored in the Vocabulary
-    
-    TODO: split into word/phoneme vectorizers
     """
     def __init__(self, data_vocab, label_vocab):
         """
@@ -336,21 +340,22 @@ class Vectorizer(object):
                 Default "chars"
         Returns:
             an instance of Vectorizer
-            
-        TODO: split into different window sizes using int splits
         """
-        data_vocab = Vocabulary()
-        label_vocab = Vocabulary(SOS=None, EOS=None, PAD=None)
-        
-        for i, row in df.iterrows():
-            if split == "char":
-                data_vocab.add_many([c for c in row.data])
-            else:
+        if split == 'char':
+            stoi = {l:i for i,l in enumerate(string.ascii_lowercase)}
+            data_vocab = Vocabulary(stoi=stoi)
+            lstoi = {l:i for i,l in enumerate(df.label.unique())}
+            label_vocab = Vocabulary(stoi=lstoi, SOS=None, EOS=None, PAD=None)
+            return cls(data_vocab, label_vocab)
+        else:
+            data_vocab = Vocabulary()
+            label_vocab = Vocabulary(SOS=None, EOS=None, PAD=None)
+            for i, row in df.iterrows():
                 data_vocab.add_many([c for c in row.data.split(split)])
+                
+                label_vocab.add_token(row.label)
             
-            label_vocab.add_token(row.label)
-        
-        return cls(data_vocab, label_vocab)
+            return cls(data_vocab, label_vocab)
     
     @classmethod
     def from_dict(cls, contents):
@@ -446,7 +451,26 @@ class TextDataset(Dataset):
             Instance of TextDataset
         """
         df = pd.read_csv(csv)
-        return cls(df, p=p,split=split, seed=seed)
+        return cls(df, p=p, split=split, seed=seed)
+    
+    @classmethod
+    def make_text_dataset(cls, df, vectorizer, p=None, seed=None):
+        """Loads a pandas DataFrame and makes Vectorizer from scratch
+        
+        DataFrame should have following named columns:
+            [data, labels, split] where
+            data are the text (documents) to vectorize
+            labels are the target labels for the text (for classification)
+            split indicates train, val, and test splits of the data
+        
+        Args:
+            csv (str): path to the dataset
+            split (str): split text into chars or words
+        Returns:
+            Instance of TextDataset
+        """
+        return cls(df, vectorizer, p=p, seed=seed)
+    
     
     def save_vectorizer(self, vectorizer_path):
         """Saves vectorizer in json format
@@ -851,7 +875,7 @@ class TrieNode(object):
         self.finished = False
         self.children = [None] * vocab_len
         self.prob = 0
-        self.prefix = ''
+        self.prefix = []
         self.cnt = 0
         
 class Trie(object):
@@ -892,7 +916,7 @@ class Trie(object):
                 curr.children[i] = TrieNode(vocab_len=self.vocab_len)
             context = curr.prefix
             curr = curr.children[i]
-            curr.prefix = context + c
+            curr.prefix = context + [c]
             curr.cnt += 1
         
         curr.finished = True
@@ -905,6 +929,7 @@ class Trie(object):
         """
         for word in wordlist:
             self.insert(word)
+        self.calculate_probabilities(self.root)
     
     def search(self, word):
         """Returns True if word is in the Trie"""
@@ -926,17 +951,33 @@ class Trie(object):
             curr = curr.children[i]
         return True
     
-    def get_probabilities(self):
+    def calculate_probabilities(self, node=None):
         """Calculates the probability of different prefixes"""
-        curr = self.root
-        total = curr.cnt
+        curr = node if node else self.root
+        
+        if curr == self.root:
+            total = sum(ch.cnt for ch in self.root.children if ch)
+        else:
+            total = curr.cnt
         
         for i in range(self.vocab_len):
             if curr.children[i]:
-                curr.children[i].prob /= total
+                curr.children[i].prob = curr.children[i].cnt / float(total)
                 self.calculate_probabilities(curr.children[i])
     
-    def calculate_empirical_distribution(self):
+    def get_distribution_from_context(self, context):
+        curr = self.root
+        for c in context:
+            i = self._ord(c)
+            curr = curr.children[i]
+        p = [0.0] * self.vocab_len
+        for i in range(self.vocab_len):
+            if not curr.children[i]:
+                continue
+            p[i] = curr.children[i].prob
+        return p
+    
+    def print_empirical_distribution(self):
         """Calculates empirical distribution for the entire Trie"""
         q = []
         q.append(self.root)
@@ -951,3 +992,5 @@ class Trie(object):
                 else:
                     cnt += 1
                     p.append(0)
+            if cnt < self.vocab_len:
+                print(f"Context: {curr.prefix}, prob: {p}")
