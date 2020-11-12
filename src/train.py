@@ -19,8 +19,8 @@ args = Namespace(
     csv='../processed_data/',
     vectorizer_file="../processed_data/vectorizer.json",
     model_checkpoint_file='/models/checkpoints/',
-    model_save_file='models/',
-    hidden_dims=128,
+    model_save_file='models/param_search/',
+    hidden_dims=[64, 128, 256, 512],
     n_lstm_layers=1,
     drop_p=0.1,
     n_epochs=100,
@@ -36,14 +36,13 @@ args = Namespace(
     seed=404
     )
 
-# utils.set_all_seeds(args.seed, args.device)
+utils.set_all_seeds(args.seed, args.device)
 
 print(args.device)
 
 for data, category in zip(args.datafiles, args.modelfiles):
-    for prob in args.probs:
+    for prob in [50, 99]:
         end = f"{prob:02}-{100-prob:02}"
-        m_name = f"{category}{end}"
 
         df = pd.read_csv(args.csv + data)
         vectorizer = utils.Vectorizer.from_df(df)
@@ -52,19 +51,25 @@ for data, category in zip(args.datafiles, args.modelfiles):
         dataset = utils.TextDataset.make_text_dataset(df, vectorizer,
             p=prob/100, seed=args.seed)
         
-        for run in range(args.n_runs):
+        # for run in range(args.n_runs):
+        
+        for hidden_units in args.hidden_dims:
+            m_name = f"{category}_{hidden_units}_{end}"
+
+            
+            run = 0
             print(f"\n{data}: {m_name}_{run}\n")
 
             model = PolyChar(
                 n_in=len(vectorizer.data_vocab),
-                n_hidden=args.hidden_dims,
+                n_hidden=hidden_units,
                 n_layers=args.n_lstm_layers,
                 n_out=len(vectorizer.data_vocab),
                 drop_p=args.drop_p
                 ).to(args.device)
             
             loss_func1 = nn.CrossEntropyLoss(ignore_index=vectorizer.data_vocab.PAD_idx)
-            # loss_func2 = nn.BCEWithLogitsLoss()
+            
             optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer,
                                                                    mode='min', factor=0.5,

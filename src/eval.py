@@ -143,7 +143,7 @@ for data, category in zip(args.datafiles, args.modelfiles):
             
             # Get N-gram models with different laplace constant
             ngrams = {}
-            for n in range(2, 5):
+            for n in range(2, 6):
                 ngrams[f"{n}-gram"] = utils.CharNGram(train_words, n,
                                                       laplace=(run+1)*0.2)
             

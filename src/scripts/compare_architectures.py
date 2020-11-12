@@ -26,11 +26,11 @@ from sklearn.model_selection import train_test_split
 
 #%% Set-up paramenters
 args = Namespace(
-    csv='../processed_data/',
-    vectorizer_file="../processed_data/vectorizer.json",
-    model_checkpoint_file='/models/checkpoints/',
-    model_save_file='models/param_search/',
-    hidden_dims=[32, 64, 128, 256],
+    csv='../../processed_data/',
+    vectorizer_file="../../processed_data/vectorizer.json",
+    model_checkpoint_file='../models/checkpoints/',
+    model_save_file='../models/param_search/',
+    hidden_dims=[64, 128, 256, 512],
     batch_size=256,
     datafiles = ['ESP-ENG.csv', 'ESP-EUS.csv'],
     modelfiles = ['ESEN_', 'ESEU_'],
@@ -59,7 +59,7 @@ for data, category in zip(args.datafiles, args.modelfiles):
             p=prob/100, seed=args.seed)
         
         for hidden_units in args.hidden_dims:
-            m_name = f"{category}{hidden_units}_{end}"
+            m_name = f"{category}_{hidden_units}_{end}"
 
             run = 0
             print(f"\n{data}: {m_name}_{run}\n")

@@ -35,7 +35,7 @@ args = Namespace(
     n_runs = 5,
     hidden_dim=128,
     learning_rate=0.001,
-    device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu'),
+    device=torch.device('cpu'),
     seed=404
     )
 
@@ -72,7 +72,7 @@ def get_distribution_from_context(model, context, vectorizer, softmax=True):
     return dist.numpy()
 
 def empirical_evaluation(args, metrics):
-
+    res = defaultdict(list)
     for data, category in zip(args.datafiles, args.modelfiles):
         
         df = pd.read_csv(args.csv + data)
@@ -90,29 +90,66 @@ def empirical_evaluation(args, metrics):
                     args.csv + data,
                     p=prob/100, seed=args.seed)
             
-            model = torch.load()
-
-
-
-df = pd.read_csv(args.csv + 'ESP-ENG.csv')
-
-trie = utils.Trie()
-trie.insert_many([list(w) + ['</s>'] for w in list(df.data)])
-trie.print_empirical_distribution()
-
-model = torch.load('models/ESEN_50-50/ESEN_50-50_0.pt')
-
+            train_words = list(dataset.train_df.data)
+            
+            for run in range(args.n_runs):
+                print(f"\n{data}: {m_name}_{run}\n")
+                    
+                ngrams = {}
+                for n in range(2, 6):
+                    ngrams[f"{n}-gram"] = utils.CharNGram(train_words, n,
+                                                          laplace=(run+1)*0.2)
+                
+                lstm_model = torch.load(args.model_save_file +\
+                                        f"{m_name}/{m_name}_{run}.pt")
+                lstm_model.to(args.device)
+                lstm_model.eval()
+                
+                ngrams['LSTM'] = lstm_model
+                
+                q = []
+                q.append(trie.root)
+                while q:
+                    p = []
+                    curr = q.pop(0)
+                    cnt = 0
+                    for ch in range(27):
+                        if curr.children[ch]:
+                            q.append(curr.children[ch])
+                            p.append(curr.children[ch].prob)
+                        else:
+                            cnt += 1
+                            p.append(0)
+                    if cnt < 27:
+                        e_dist = np.float32(p)
+                        context = curr.prefix
+                        
+                        for model, m in ngrams.items():
+                            if isinstance(m, utils.CharNGram):
+                                p_dist = m.get_distribution_from_context(context).values()
+                                p_dist = np.float32(list(p_dist))
+                            else:
+                                p_dist = get_distribution_from_context(lstm_model,
+                                                                       context,
+                                                                       vectorizer)
+   
+                
+                # TODO append here by dividing by the total
+                res['model'].append(model)
+                res['dataset'].append(category[:-1])
+                res['prob'].append(prob)
+                res['run'].append(run)
+                for metric, func in metrics.items():
+                    res[metric].append(func(e_dist, p_dist))
+                        
+    return res
+                            
 metrics = {'KL': kl_divergence, 'cosine': cosine_distance,
            'sse': sse}
 
+results = empirical_evaluation(args, metrics)
 
-plt.bar(list(string.ascii_lowercase) + ['</s>'], get_distribution_from_context(model, "loc", vectorizer))
-plt.bar(list(string.ascii_lowercase) + ['</s>'], np.float32(trie.get_distribution_from_context("loc")))
+results = pd.DataFrame(results)
 
-dist2 = get_distribution_from_context(model, "loc", vectorizer)
-dist1 = np.float32(trie.get_distribution_from_context("loc"))
-
-print(sse(dist1, dist2))
-print(cosine_distance(dist1, dist2))
-print(kl_divergence(dist1, dist2))
-print(lrt(dist1, dist2))
+sns.catplot(x='model', y='KL', hue='prob', row='dataset', data=results,
+            kind='bar', palette='Reds')
