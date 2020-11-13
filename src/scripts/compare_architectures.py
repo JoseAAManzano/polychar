@@ -5,6 +5,11 @@ Created on Thu Nov  5 15:14:44 2020
 @author: josea
 """
 # %% Impports
+import sys
+import os
+
+sys.path.append(os.path.abspath(".."))
+
 import utils
 import torch
 import math
@@ -41,6 +46,54 @@ args = Namespace(
     seed=404
 )
 
+# %% Helper
+def get_distribution_from_context(model, context, vectorizer, device='cpu',
+                                  softmax=True):
+    model.to(device)
+    hidden = model.initHidden(1, device)
+
+    for i, (f_v, t_v) in vectorizer.vectorize_single_char(context):
+        f_v = f_v.to(device)
+        out, hidden = model(f_v.unsqueeze(1), hidden)
+    dist = torch.flatten(out.detach())
+    # Take only valid continuations (letters + SOS)
+    dist = dist[:-2] + dist[-1]
+
+    if softmax:
+        dist = F.softmax(dist, dim=0)
+
+    return dist.numpy()
+
+def kl_divergence(dist1, dist2):
+    pos = (dist1 != 0.) & (dist2 != 0.)
+    return np.sum(dist1[pos] * (np.log2(dist1[pos]) - np.log2(dist2[pos])))
+
+def eval_distributions(model, trie, vectorizer, vocab_len=27):
+    total_kl = 0
+    total_eval = 0
+    q = [trie.root]
+    while q:
+        p = []
+        curr = q.pop(0)
+        cnt = 0
+        for ch in range(vocab_len):
+            if curr.children[ch]:
+                q.append(curr.children[ch])
+                p.append(curr.children[ch].prob)
+            else:
+                cnt += 1
+                p.append(0)
+        if cnt < vocab_len:
+            e_dist = np.float32(p)
+            context = curr.prefix
+            
+            p_dist = get_distribution_from_context(model, context, vectorizer)
+            
+            total_kl += kl_divergence(e_dist, p_dist)
+            
+            total_eval += 1
+    return total_kl / total_eval
+    
 # %%
 res = defaultdict(list)
 
@@ -48,15 +101,19 @@ for data, category in zip(args.datafiles, args.modelfiles):
     for prob in [50, 99]:
         end = f"{prob:02}-{100-prob:02}"
 
-        df = pd.read_csv(args.csv + data)
-        vectorizer = utils.Vectorizer.from_df(df)
+        dataset = utils.TextDataset.load_dataset_and_make_vectorizer(
+            args.csv + data,
+            p=prob/100, seed=args.seed)
+        vectorizer = dataset.get_vectorizer()
 
-        trie = utils.Trie()
-        trie.insert_many([list(w) + ['</s>'] for w in df.data])
+        train_words = list(dataset.train_df.data)
+        val_words = list(dataset.val_df.data)
 
-        # Set-up dataset, vectorizer, and model
-        dataset = utils.TextDataset.make_text_dataset(df, vectorizer,
-                                                      p=prob/100, seed=args.seed)
+        train_trie = utils.Trie()
+        train_trie.insert_many([list(w) + ['</s>'] for w in train_words])
+        
+        val_trie = utils.Trie()
+        val_trie.insert_many([list(w) + ['</s>'] for w in val_words])
 
         for hidden_units in args.hidden_dims:
             m_name = f"{category}_{hidden_units}_{end}"
@@ -97,7 +154,7 @@ for data, category in zip(args.datafiles, args.modelfiles):
             res['accuracy'].append(running_acc)
             res['perplexity'].append(math.exp(running_loss))
 
-            dataset.set_split('test')
+            dataset.set_split('val')
             batch_generator = utils.generate_batches(dataset,
                                                      batch_size=args.batch_size,
                                                      device=args.device)
@@ -118,26 +175,41 @@ for data, category in zip(args.datafiles, args.modelfiles):
                 )
                 running_acc += (acc_chars - running_acc) / (batch_id + 1)
 
-            res['test_loss'].append(running_loss)
-            res['test_accuracy'].append(running_acc)
-            res['test_perplexity'].append(math.exp(running_loss))
+            res['val_loss'].append(running_loss)
+            res['val_accuracy'].append(running_acc)
+            res['val_perplexity'].append(math.exp(running_loss))
+            res['KL'].append(eval_distributions(model, train_trie, vectorizer))
+            res['val_KL'].append(eval_distributions(model, val_trie,
+                                                    vectorizer))
 
 results = pd.DataFrame(res)
 
 results_acc = pd.melt(results, id_vars=['dataset', 'prob', 'hidden'],
-                      value_vars=['accuracy', 'test_accuracy'],
+                      value_vars=['accuracy', 'val_accuracy'],
                       var_name='split', value_name='ACC')
 results_acc['split'] = np.where(
-    results_acc.split == 'accuracy', 'train', 'test')
+    results_acc.split == 'accuracy', 'train', 'val')
 
-g = sns.catplot(x='hidden', y='ACC', hue='split', hue_order=['train', 'test'],
-                row='dataset', col='prob', kind='bar', data=results_acc, palette='Reds')
+g = sns.catplot(x='hidden', y='ACC', hue='split', hue_order=['train', 'val'],
+                row='dataset', col='prob', kind='bar',
+                data=results_acc, palette='Reds')
 
 
 results_loss = pd.melt(results, id_vars=['dataset', 'prob', 'hidden'],
-                       value_vars=['loss', 'test_loss'],
+                       value_vars=['loss', 'val_loss'],
                        var_name='split', value_name='LOSS')
-results_loss['split'] = np.where(results_loss.split == 'loss', 'train', 'test')
+results_loss['split'] = np.where(results_loss.split == 'loss', 'train', 'val')
 
-g = sns.catplot(x='hidden', y='LOSS', hue='split', hue_order=['train', 'test'],
-                row='dataset', col='prob', kind='bar', data=results_loss, palette='Reds')
+g = sns.catplot(x='hidden', y='LOSS', hue='split', hue_order=['train', 'val'],
+                row='dataset', col='prob', kind='bar',
+                data=results_loss, palette='Reds')
+
+
+results_kl = pd.melt(results, id_vars=['dataset', 'prob', 'hidden'],
+                       value_vars=['KL', 'val_KL'],
+                       var_name='split', value_name='kl')
+results_kl['split'] = np.where(results_kl.split == 'KL', 'train', 'val')
+
+g = sns.catplot(x='hidden', y='kl', hue='split', hue_order=['train', 'val'],
+                row='dataset', col='prob', kind='bar',
+                data=results_kl, palette='Reds')
