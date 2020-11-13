@@ -41,5 +41,8 @@ class PolyChar(nn.Module):
         return chars_out.view(batch_size, seq_size, self.n_out), hidden
 
     def initHidden(self, batch_size, device):
-        return (torch.zeros(self.n_layers, batch_size, self.n_hidden).to(device),
-                torch.zeros(self.n_layers, batch_size, self.n_hidden).to(device))
+        hidden = torch.zeros(self.n_layers, batch_size,
+                             self.n_hidden)
+        cell = torch.zeros(self.n_layers, batch_size,
+                           self.n_hidden)
+        return (hidden.to(device), cell.to(device))
