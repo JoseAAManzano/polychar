@@ -9,7 +9,7 @@ Created on Thu Oct  1 17:23:28 2020
 
 @author: Jose Armando Aguasvivas
 """
-#%% Imports
+# %% Imports
 import math
 import json
 import torch
@@ -22,14 +22,16 @@ from collections import Counter
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 
-#%% Helper functions
+# %% Helper functions
+
+
 def generate_batches(dataset, batch_size, shuffle=True,
                      drop_last=True, device="cpu"):
     """
     Generator function wrapping PyTorch's DataLoader
-    
+
     Ensures torch.Tensors are sent to appropriate device
-    
+
     Args:
         dataset (Dataset): instance of Dataset class
         batch_size (int)
@@ -40,25 +42,27 @@ def generate_batches(dataset, batch_size, shuffle=True,
         device (torch.device): device to send tensors (for GPU computing)
     """
     dataloader = DataLoader(dataset=dataset, batch_size=batch_size,
-                             shuffle=shuffle, drop_last=drop_last)
-    
+                            shuffle=shuffle, drop_last=drop_last)
+
     for data_dict in dataloader:
         out_data_dict = {}
         for name, tensor in data_dict.items():
             out_data_dict[name] = tensor.to(device)
         yield out_data_dict
-        
+
+
 def set_all_seeds(seed, device):
     """Simultaneously set all seeds from numpy and PyTorch"""
     np.random.seed(seed)
     torch.manual_seed(seed)
     if device == torch.device('cuda:0'):
         torch.cuda.manual_seed_all(seed)
-        
+
+
 def make_train_state():
     return {
         'epoch_idx': 0,
-        'early_stopping_step':0,
+        'early_stopping_step': 0,
         'early_stopping_best_val': 1e10,
         'train_loss': [],
         'train_acc': [],
@@ -66,16 +70,18 @@ def make_train_state():
         'val_acc': [],
         'test_loss': -1,
         'test_acc': -1,
-        }
+    }
+
 
 def compute_lang_accuracy(y_pred, y_target):
     preds = torch.sigmoid(y_pred)
     n_correct = torch.eq(preds > 0.5, y_target).sum().item()
     return n_correct / len(preds) * 100
 
+
 def normalize_sizes(y_pred, y_true):
     """Normalize tensor sizes
-    
+
     Args:
         y_pred (torch.Tensor): the output of the model
             If a 3-dimensional tensor, reshapes to a matrix
@@ -88,28 +94,30 @@ def normalize_sizes(y_pred, y_true):
         y_true = y_true.contiguous().view(-1)
     return y_pred, y_true
 
+
 def compute_accuracy(y_pred, y_true, mask_index=None):
     y_pred, y_true = normalize_sizes(y_pred, y_true)
 
     _, y_pred_indices = y_pred.max(dim=1)
-    
+
     correct_indices = torch.eq(y_pred_indices, y_true).float()
     valid_indices = torch.ne(y_true, mask_index).float()
-    
+
     n_correct = (correct_indices * valid_indices).sum().item()
     n_valid = valid_indices.sum().item()
 
     return n_correct / n_valid * 100
+
 
 def print_state_dict(train_state):
     for k, v in train_state.items():
         if isinstance(v, list):
             print(f"{k}: {v[-1]:.2f}")
         elif isinstance(v, float):
-            print(f"{k}: {v:.2f}")            
+            print(f"{k}: {v:.2f}")
         else:
             print(f"{k}: {v}")
-    
+
     # print((f"Epoch: {train_state['epoch_idx'] + 1} | "
     #        f"train_loss: {train_state['train_loss'][-1]:.4f} | "
     #        f"val_loss: {train_state['val_loss'][-1]:.4f}\n"
@@ -118,15 +126,16 @@ def print_state_dict(train_state):
     #        f"val_acc_chars: {train_state['val_acc'][-1]:.2f} | "
     #        # f"val_acc_lang: {train_state['val_lang_acc'][-1]:.2f}\n"
     #        ))
-    
+
+
 def sample_from_model(model, vectorizer, num_samples=1, sample_size=10,
                       temp=1.0, device='cpu'):
     begin_seq = [vectorizer.data_vocab.SOS_idx for _ in range(num_samples)]
     begin_seq = vectorizer.onehot(begin_seq).unsqueeze(1).to(device)
     indices = [begin_seq]
-    
+
     h_t = model.initHidden(batch_size=num_samples, device=device)
-    
+
     for time_step in range(sample_size):
         x_t = indices[time_step]
         out, hidden = model(x_t, h_t)
@@ -139,18 +148,18 @@ def sample_from_model(model, vectorizer, num_samples=1, sample_size=10,
     indices = torch.stack(indices).squeeze(1).permute(2, 0, 1)
     print(indices.shape)
     return indices
-        
 
 
-#%% Helper classes
-    
-#%% Vocabulary class
+# %% Helper classes
+
+# %% Vocabulary class
 class Vocabulary(object):
     """
     Class to handle vocabulary extracted from list of words or sentences.
-    
+
     TODO: Extend to handle phonemes as well
     """
+
     def __init__(self, stoi=None, SOS="<s>", EOS="</s>", PAD="<p>"):
         """
         Args:
@@ -167,19 +176,19 @@ class Vocabulary(object):
         if stoi is None:
             stoi = {}
         self._stoi = stoi
-        self._itos = {i:s for s,i in self._stoi.items()}
-        
+        self._itos = {i: s for s, i in self._stoi.items()}
+
         self._SOS_token = SOS
         self._EOS_token = EOS
         self._PAD_token = PAD
-        
+
         if self._SOS_token is not None:
             self.SOS_idx = self.add_token(self._SOS_token)
         if self._EOS_token is not None:
             self.EOS_idx = self.add_token(self._EOS_token)
         if self._PAD_token is not None:
             self.PAD_idx = self.add_token(self._PAD_token)
-            
+
     def to_dict(self):
         """Returns full vocabulary dictionary"""
         return {
@@ -188,16 +197,16 @@ class Vocabulary(object):
             "SOS_token": self._SOS_token,
             "EOS_token": self._EOS_token,
             "PAD_token": self._PAD_token
-            }
+        }
 
     @classmethod
     def from_dict(cls, contents):
         """Instantiates vocabulary from dictionary"""
         return cls(**contents)
-    
+
     def add_token(self, token):
         """Update mapping dicts based on token
-        
+
         Args:
             token (str): token to be added
         Returns:
@@ -210,33 +219,36 @@ class Vocabulary(object):
             self._stoi[token] = idx
             self._itos[idx] = token
         return idx
-    
+
     def add_many(self, tokens):
         """Adds multiple tokens, one at a time"""
         return [self.add_token(token) for token in tokens]
-    
+
     def token2idx(self, token):
         """Returns index of token"""
         return self._stoi[token]
-    
+
     def idx2token(self, idx):
         """Returns token based on index"""
         if idx not in self._itos:
             raise KeyError(f"Index {idx} not in Vocabulary")
         return self._itos[idx]
-    
+
     def __str__(self):
         return f"<Vocabulary(size={len(self)})>"
-    
+
     def __len__(self):
         return len(self._stoi)
 
-#%% Vectorizer Class
+# %% Vectorizer Class
+
+
 class Vectorizer(object):
     """
     The Vectorizer creates one-hot vectors from sequence of characters/words
     stored in the Vocabulary
     """
+
     def __init__(self, data_vocab, label_vocab):
         """
         Args:
@@ -245,15 +257,15 @@ class Vectorizer(object):
         """
         self.data_vocab = data_vocab
         self.label_vocab = label_vocab
-        
+
     def vectorize(self, data, vector_len=-1):
         """Vectorize data into observations and targets
-        
+
         Outputs are the vectorized data split into:
             data[:-1] and data[1:]
         At each timestep, the first tensor is the observations, the second
         vector is the target predictions (indices of words and characters)
-        
+
         Args:
             data (str or List[str]): data to be vectorized
                 Works for both char level and word level vectorizations
@@ -268,34 +280,34 @@ class Vectorizer(object):
         indices = [self.data_vocab.SOS_idx]
         indices.extend(self.data_vocab.token2idx(t) for t in data)
         indices.append(self.data_vocab.EOS_idx)
-    
+
         # if add_SOS:
         #     indices = [self.data_vocab._SOS_token] + indices
         # if add_EOS:
         #     indices = indices + [self.data_vocab._EOS_token]
-        
+
         if vector_len < 0:
             vector_len = len(indices)-1
-        
+
         from_vector = torch.empty(vector_len, len(self.data_vocab),
                                   dtype=torch.float32)
         from_indices = indices[:-1]
         # Add pre-padding
         from_vector[:-len(from_indices)] = self.onehot([
-                                        self.data_vocab.PAD_idx
-                                        ])
+            self.data_vocab.PAD_idx
+        ])
         from_vector[-len(from_indices):] = self.onehot(from_indices)
-        
+
         to_vector = torch.empty(vector_len, dtype=torch.int64)
         to_indices = indices[1:]
         to_vector[:-len(to_indices)] = self.data_vocab.PAD_idx
         to_vector[-len(to_indices):] = torch.LongTensor(to_indices)
-        
+
         return from_vector, to_vector
-    
+
     def vectorize_single_char(self, word):
         """Encodes a word character by character
-        
+
         Args:
             word (str): word to encode
         Yields:
@@ -308,15 +320,15 @@ class Vectorizer(object):
         indices = [self.data_vocab.SOS_idx]
         indices.extend(self.data_vocab.token2idx(c) for c in word)
         indices.append(self.data_vocab.EOS_idx)
-        
+
         for i, (idx1, idx2) in enumerate(zip(indices[:-1], indices[1:])):
             from_vector = self.onehot([idx1])
             to_vector = torch.LongTensor([idx2])
             yield i, (from_vector, to_vector)
-    
+
     def onehot(self, indices):
         """Encodes a list of indices into a one-hot tensor
-        
+
         Args:
             indices (List[int]): list of indices to encode
         Returns:
@@ -325,15 +337,15 @@ class Vectorizer(object):
         """
         onehot = torch.zeros(len(indices), len(self.data_vocab),
                              dtype=torch.float32)
-        
+
         for i, idx in enumerate(indices):
             onehot[i][idx] = 1.
         return onehot
-        
+
     @classmethod
     def from_df(cls, df, split="char"):
         """Instantiate the vectorizer from a dataframe
-        
+
         Args:
             df (pandas.DataFrame): the dataset
             splits (str): split data into chars or words
@@ -342,9 +354,9 @@ class Vectorizer(object):
             an instance of Vectorizer
         """
         if split == 'char':
-            stoi = {l:i for i,l in enumerate(string.ascii_lowercase)}
+            stoi = {l: i for i, l in enumerate(string.ascii_lowercase)}
             data_vocab = Vocabulary(stoi=stoi)
-            lstoi = {l:i for i,l in enumerate(df.label.unique())}
+            lstoi = {l: i for i, l in enumerate(df.label.unique())}
             label_vocab = Vocabulary(stoi=lstoi, SOS=None, EOS=None, PAD=None)
             return cls(data_vocab, label_vocab)
         else:
@@ -352,15 +364,15 @@ class Vectorizer(object):
             label_vocab = Vocabulary(SOS=None, EOS=None, PAD=None)
             for i, row in df.iterrows():
                 data_vocab.add_many([c for c in row.data.split(split)])
-                
+
                 label_vocab.add_token(row.label)
-            
+
             return cls(data_vocab, label_vocab)
-    
+
     @classmethod
     def from_dict(cls, contents):
         """Instantiate the vectorizer from a dictionary
-        
+
         Args:
             contents (pandas.DataFrame): the dataset
         Returns:
@@ -369,17 +381,20 @@ class Vectorizer(object):
         data_vocab = Vocabulary.from_dict(contents['data_vocab'])
         label_vocab = Vocabulary.from_dict(contents['label_vocab'])
         return cls(data_vocab, label_vocab)
-    
+
     def to_dict(self):
         """Returns a dictionary of the vocabularies"""
         return {
             'data_vocab': self.data_vocab.to_dict(),
             'label_vocab': self.label_vocab.to_dict()
-            }
-        
-#%% TextDataset class
+        }
+
+# %% TextDataset class
+
+
 class TextDataset(Dataset):
     """Combines Vocabulary and Vectorizer classes into one easy interface"""
+
     def __init__(self, df, vectorizer=None, p=None, split="char", seed=None):
         """
         Args:
@@ -390,8 +405,8 @@ class TextDataset(Dataset):
                 Default None
         """
         self.df = df
-        
-        self.train_df = self.df[self.df.split=='train']
+
+        self.train_df = self.df[self.df.split == 'train']
         if p is not None:
             labs = self.train_df.label.unique()
             tmp = pd.DataFrame()
@@ -403,47 +418,48 @@ class TextDataset(Dataset):
                                                  random_state=seed)])
             self.train_df = tmp
         self.train_size = len(self.train_df)
-        
+
         if not vectorizer:
             self._vectorizer = Vectorizer.from_df(self.train_df, split=split)
         else:
             self._vectorizer = vectorizer
-        
-        self.val_df = self.df[self.df.split=='val']
+
+        self.val_df = self.df[self.df.split == 'val']
         self.val_size = len(self.val_df)
-        
-        self.test_df = self.df[self.df.split=='test']
+
+        self.test_df = self.df[self.df.split == 'test']
         self.test_size = len(self.test_df)
-        
-        self._max_seq_len = max(map(len, self.df.data)) + 1 # SOS/EOS
-        
+
+        self._max_seq_len = max(map(len, self.df.data)) + 1  # SOS/EOS
+
         self._lookup_dict = {
             "train": (self.train_df, self.train_size),
             "val": (self.val_df, self.val_size),
             "test": (self.test_df, self.test_size)
-            }
-        
+        }
+
         self.set_split('train')
-        
+
         # Handles imbalanced labels
         labels = self.train_df.label.value_counts().to_dict()
+
         def sort_key(item):
             return self._vectorizer.label_vocab.token2idx(item[0])
         sorted_cnts = sorted(labels.items(), key=sort_key)
         freqs = [cnt for _, cnt in sorted_cnts]
         self.label_weights = 1.0 / torch.tensor(freqs, dtype=torch.float32)
-        
+
     @classmethod
     def load_dataset_and_make_vectorizer(cls, csv, split="char", p=None,
                                          seed=None):
         """Loads a pandas DataFrame and makes Vectorizer from scratch
-        
+
         DataFrame should have following named columns:
             [data, labels, split] where
             data are the text (documents) to vectorize
             labels are the target labels for the text (for classification)
             split indicates train, val, and test splits of the data
-        
+
         Args:
             csv (str): path to the dataset
             split (str): split text into chars or words
@@ -452,17 +468,17 @@ class TextDataset(Dataset):
         """
         df = pd.read_csv(csv)
         return cls(df, p=p, split=split, seed=seed)
-    
+
     @classmethod
     def make_text_dataset(cls, df, vectorizer, p=None, seed=None):
         """Loads a pandas DataFrame and makes Vectorizer from scratch
-        
+
         DataFrame should have following named columns:
             [data, labels, split] where
             data are the text (documents) to vectorize
             labels are the target labels for the text (for classification)
             split indicates train, val, and test splits of the data
-        
+
         Args:
             csv (str): path to the dataset
             split (str): split text into chars or words
@@ -470,38 +486,37 @@ class TextDataset(Dataset):
             Instance of TextDataset
         """
         return cls(df, vectorizer, p=p, seed=seed)
-    
-    
+
     def save_vectorizer(self, vectorizer_path):
         """Saves vectorizer in json format
-        
+
         Args:
             vectorizer_path (str): path to save vectorizer
         """
         with open(vectorizer_path, 'w') as f:
             json.dump(self._vectorizer.to_dict(), f)
-    
+
     def get_vectorizer(self):
         """Returns vectorizer for the dataset"""
         return self._vectorizer
-    
+
     def set_split(self, split="train"):
         """Changes the split of TextDataset
-        
+
         Options depend on splits used when creating TextDataset
         Ideally "train", "val", "test"
         """
         self._target_split = split
         self._target_df, self._target_size = self._lookup_dict[split]
-    
+
     def __len__(self):
         return self._target_size
-    
+
     def __getitem__(self, index):
         """Primary interface between TextDataset and PyTorch's DataLoader
-        
+
         Used for generating batches of data (see utils.generate_batches)
-        
+
         Args:
             index (int): Index of the data point
         Returns:
@@ -509,17 +524,17 @@ class TextDataset(Dataset):
                 [X, Y, label]
         """
         row = self._target_df.iloc[index]
-        
+
         from_vector, to_vector = self._vectorizer.vectorize(row.data,
                                                             self._max_seq_len)
-        
+
         label = self._vectorizer.label_vocab.token2idx(row.label)
-        
+
         return {'X': from_vector, 'Y': to_vector, 'label': label}
-    
+
     def get_num_batches(self, batch_size):
         """Returns number of batches in the dataset given batch_size
-        
+
         Args:
             batch_size (int)
         Returns:
@@ -527,19 +542,22 @@ class TextDataset(Dataset):
         """
         return len(self) // batch_size
 
-#%% CharNGram Class
+# %% CharNGram Class
+
+
 class CharNGram(object):
     """A character n-gram model trained on a list of words.
-    
+
     Concepts from Jurafsky, D., & Martin, J.H. (2019). Speech and Language
     Processing. Stanford Press. https://web.stanford.edu/~jurafsky/slp3/
-    
+
     This class is not optimized for large ngram models, use with caution
     for models of order 5 and above.
     """
+
     def __init__(self, data, n, laplace=1, SOS_token='<s>', EOS_token='</s>'):
         """Data should be iterable of words
-        
+
         Args:
             data (List[str]): dataset from which to create the ngram model
             n (int): order of the model. Should be larger than 0
@@ -558,10 +576,10 @@ class CharNGram(object):
         self.processed_data = self._preprocess(self.data, n)
         self.ngrams = self._split_and_count(self.processed_data, self.n)
         self.model = self._smooth()
-        
+
     def _preprocess(self, data, n):
         """Private method to preprocess a dataset of documents
-        
+
         Args:
             data (List[str]): documents to be processed
             n (int): order of ngram model for processing
@@ -572,13 +590,13 @@ class CharNGram(object):
         for word in data:
             new_data.append(self.process_word(word, n))
         return new_data
-    
+
     def process_word(self, word, n):
         """Adds SOS and EOS tokens with padding
-        
+
         Adds padding of SOS_tokens and EOS_tokens to each document
             padding size = n-1 for n > 1
-        
+
         Args:
             word (str): word to be padded
             n (int): order of ngram model
@@ -587,17 +605,17 @@ class CharNGram(object):
         """
         pad = max(1, n-1)
         return [self.SOS_token] * pad +\
-                    list(word.lower()) +\
-                    [self.EOS_token]
-    
+            list(word.lower()) +\
+            [self.EOS_token]
+
     def _split_word(self, word, n):
         """Private generator to handle moving window over word of size n"""
         for i in range(len(word) - n + 1):
             yield tuple(word[i:i+n])
-    
+
     def _split_and_count(self, data, n):
         """Private method to create ngram counts
-        
+
         Args:
             data (List[str]): preprocessed data
             n (int): order of ngram model
@@ -609,12 +627,12 @@ class CharNGram(object):
             for ngram in self._split_word(word, n):
                 cntr[ngram] += 1
         return cntr
-    
+
     def _initialize_counts(self, n):
         """Private method to initialize the ngram counter
-        
+
         Accounts for unseen tokens by taking the product of the vocabulary
-        
+
         Args:
             n (int): order of ngram model
         Returns:
@@ -622,11 +640,14 @@ class CharNGram(object):
         """
         def is_plausible(permutation):
             if self.SOS_token not in permutation and \
-                self.EOS_token not in permutation: return True
+                    self.EOS_token not in permutation:
+                return True
             n = len(permutation)
-            
-            if self.EOS_token in permutation[0]: return False
-            if self.SOS_token in permutation[-1]: return False
+
+            if self.EOS_token in permutation[0]:
+                return False
+            if self.SOS_token in permutation[-1]:
+                return False
             flg = False
             cnt = 0
             for i in range(n-1, -1, -1):
@@ -634,9 +655,11 @@ class CharNGram(object):
                     flg = True
                     cnt += 1
                 else:
-                    if flg: return False
-            if cnt == n: return False
-            
+                    if flg:
+                        return False
+            if cnt == n:
+                return False
+
             flg = False
             cnt = 0
             for i in range(n):
@@ -644,20 +667,22 @@ class CharNGram(object):
                     flg = True
                     cnt += 1
                 else:
-                    if flg: return False
+                    if flg:
+                        return False
             return True
-            if cnt == n : return False
-        
+            if cnt == n:
+                return False
+
         cntr = Counter()
         for perm in product(self.vocab, repeat=n):
             if is_plausible(perm):
                 cntr[tuple(perm)] = 0
         return cntr
-    
+
     def _smooth(self):
         """Private method to convert counts to probabilities using
         additive Laplace smoothing
-        
+
         Returns:
             cntr (Counter): normalized probabilities of each ngram in data
         """
@@ -666,26 +691,26 @@ class CharNGram(object):
             return Counter({key: val/s for key, val in self.ngrams.items()})
         else:
             vocab_size = len(self.vocab)-1
-            
+
             ret = self.ngrams.copy()
-            
+
             m = self.n - 1
             m_grams = self._split_and_count(self.processed_data, m)
-            
+
             for ngram, value in self.ngrams.items():
                 m_gram = ngram[:-1]
                 m_count = m_grams[m_gram]
                 ret[ngram] = (value + self.laplace) /\
-                            (m_count + self.laplace * vocab_size)
-            
+                    (m_count + self.laplace * vocab_size)
+
             return ret
-    
+
     def to_txt(self, filepath):
         """Saves model to disk as a tab separated txt file"""
         with open(filepath, 'w') as file:
             for ngram, value in self.model.items():
                 file.write(f"{' '.join(ngram)}\t{value}\n")
-    
+
     def from_txt(self, filepath):
         """Reads model from a tab separated txt file"""
         with open(filepath, 'r') as file:
@@ -694,12 +719,12 @@ class CharNGram(object):
         for ngram, value in data.split('\t'):
             self.model[tuple(ngram.split(' '))] = value
         self.n = len(self.model.keys()[0])
-    
+
     def to_df(self):
         """Creates a DataFrame from Counter of ngrams
-        
+
         Warning: Do not use with ngrams of order >= 5
-        
+
         Returns:
             df (pandas.DataFrame): dataframe of normalized probabilities
                 shape [n_plausible_ngrams, len(vocab)]
@@ -716,11 +741,11 @@ class CharNGram(object):
             trgt = ngram[-1]
             df.loc[cntx, trgt] = value
         return df.fillna(0.0)
-    
+
     def get_single_probability(self, word, log=False):
         """Calculates the probability (likelihood) of a word given the ngram
         model
-        
+
         Args:
             word (str or List[str]): target word
             log (bool): whether to get loglikelihood instead of probability
@@ -740,25 +765,25 @@ class CharNGram(object):
             else:
                 prob *= p
         return prob / n
-    
+
     def perplexity(self, data):
         """Calculates the perplexity of an entire dataset given the model
-        
+
         Perplexity is the inverse probability of the dataset, normalized
         by the number of words
-        
+
         To avoid numeric overflow due to multiplication of probabilities,
         the probabilties are log-transformed and the final score is then
         exponentiated. Thus:
-            
+
             Perplexity = exp(-(sum(probs)/N)) ~ exp(NLL/N)
-        
+
         where N is the number of words and probs is the vector of probabilities
         for each word in the dataset.
-        
+
         Lower perplexity is equivalent to higher probability of the data given
         the ngram model.
-        
+
         Args:
             data (\List[str]): datset of words
         Returns:
@@ -766,17 +791,17 @@ class CharNGram(object):
         """
         test_tokens = self._preprocess(data, self.n)
         N = len(test_tokens)
-        
+
         probs = 0.0
         for word in test_tokens:
             probs -= self.get_single_probability(word, log=True)
-        
+
         return math.exp(probs/N)
-    
+
     def get_distribution_from_context(self, context):
         """Get the multinomial distribution for the next character given a
         context
-        
+
         Args:
             context (str or List[str]): context of variable length
         Returns:
@@ -788,12 +813,12 @@ class CharNGram(object):
         elif m > self.n-1:
             context = list(context[-self.n+1:])
         context = list(context)
-        dist = {v:0 for v in self.vocab}
+        dist = {v: 0 for v in self.vocab}
         for v in self.vocab:
             dist[v] = self.model[tuple(context + [v])]
         del dist[self.SOS_token]
         return dist
-    
+
     def calculate_accuracy(self, wordlist, topk=1):
         N = len(wordlist)
         total_acc = 0.0
@@ -805,18 +830,18 @@ class CharNGram(object):
                     break
                 dist = self.get_distribution_from_context(ngram)
                 topl = [k for k, _ in sorted(dist.items(),
-                                              key=lambda x:x[1],
-                                              reverse=True)]
+                                             key=lambda x:x[1],
+                                             reverse=True)]
                 acc += 1 if padded_word[i+self.n] in topl[:topk] else 0
             total_acc += (acc / (len(word)+1))
         return total_acc * 100 / N
-    
+
     def _next_candidate(self, prev, without=[]):
         """Private method to select next candidate from previous context
-        
+
         Candidates are selected at random from a multinomial distribution
         weighted by the probability of next token given context.
-        
+
         Args:
             prev (Tuple[str]): previous context
         Returns:
@@ -824,16 +849,16 @@ class CharNGram(object):
             prob (float): probability of next candidate given context
         """
         letters = self.get_distribution_from_context(prev)
-        letters = {l:prob for l, prob in letters.items() if l not in without}
+        letters = {l: prob for l, prob in letters.items() if l not in without}
         letters, probs = list(letters.keys()), list(letters.values())
         topi = torch.multinomial(torch.FloatTensor(probs), 1)[0].item()
         return letters[topi], probs[topi]
-    
+
     def generate_words(self, num, min_len=3, max_len=10, without=[]):
         """Generates a number of words by sampling from the ngram model
-        
+
         Generator method.
-        
+
         Args:
             num (int): number of words to generate
             min_len (int): minimum length of the words
@@ -857,16 +882,19 @@ class CharNGram(object):
             word = [w for w in word if w not in [self.SOS_token,
                                                  self.EOS_token]]
             yield ''.join(word), -1/math.log(prob)
-    
+
     def __len__(self):
         return len(self.ngrams)
-    
+
     def __str__(self):
         return f"<{self.n}-gram model(size={len(self)})>"
 
-#%% Trie
+# %% Trie
+
+
 class TrieNode(object):
     """Node for the Trie class"""
+
     def __init__(self, vocab_len=27):
         """
         Args:
@@ -877,11 +905,13 @@ class TrieNode(object):
         self.prob = 0
         self.prefix = []
         self.cnt = 0
-        
+
+
 class Trie(object):
     """Trie (pronounced "try") or prefix tree is a tree data structure,
     which is used for retrieval of a key in a dataset of strings.
     """
+
     def __init__(self, vocab_len=27):
         """
         Args:
@@ -889,14 +919,14 @@ class Trie(object):
         """
         self.vocab_len = vocab_len
         self.root = TrieNode(vocab_len=vocab_len)
-    
+
     def _ord(self, c):
         """Private method to get index from character"""
-        if c == '</s>': 
+        if c == '</s>':
             ret = self.vocab_len - 1
         else:
             ret = ord(c) - ord('a')
-        
+
         if not 0 <= ret <= self.vocab_len:
             raise KeyError(f"Character index {ret} not in vocabulary")
         else:
@@ -904,12 +934,12 @@ class Trie(object):
 
     def insert(self, word):
         """Inserts a word into the Trie
-        
+
         Args:
             word (str or List[str]): word to be added to Trie
         """
         curr = self.root
-        
+
         for c in word:
             i = self._ord(c)
             if not curr.children[i]:
@@ -918,19 +948,19 @@ class Trie(object):
             curr = curr.children[i]
             curr.prefix = context + [c]
             curr.cnt += 1
-        
+
         curr.finished = True
-    
+
     def insert_many(self, wordlist):
         """Inserts several words into the Trie
-        
+
         Args:
             wordlist (List[List[str]]): list of words to be added to Trie
         """
         for word in wordlist:
             self.insert(word)
         self.calculate_probabilities(self.root)
-    
+
     def search(self, word):
         """Returns True if word is in the Trie"""
         curr = self.root
@@ -940,7 +970,7 @@ class Trie(object):
                 return False
             curr = curr.children[i]
         return curr.finished
-            
+
     def starts_with(self, prefix):
         """Returns True if prefix is in Trie"""
         curr = self.root
@@ -950,21 +980,21 @@ class Trie(object):
                 return False
             curr = curr.children[i]
         return True
-    
+
     def calculate_probabilities(self, node=None):
         """Calculates the probability of different prefixes"""
         curr = node if node else self.root
-        
+
         if curr == self.root:
             total = sum(ch.cnt for ch in self.root.children if ch)
         else:
             total = curr.cnt
-        
+
         for i in range(self.vocab_len):
             if curr.children[i]:
                 curr.children[i].prob = curr.children[i].cnt / float(total)
                 self.calculate_probabilities(curr.children[i])
-    
+
     def get_distribution_from_context(self, context):
         curr = self.root
         for c in context:
@@ -976,7 +1006,7 @@ class Trie(object):
                 continue
             p[i] = curr.children[i].prob
         return p
-    
+
     def print_empirical_distribution(self):
         """Calculates empirical distribution for the entire Trie"""
         q = []
