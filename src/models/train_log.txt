@@ -1,0 +1,1422 @@
+
+ESP-ENG.csv: ESEN__01-99_0
+
+10
+20
+30
+40
+50
+60
+70
+80
+Early stopping reached at epoch 84
+epoch_idx: 83
+early_stopping_step: 5
+early_stopping_best_val: 2.03
+train_loss: 1.59
+train_acc: 48.47
+val_loss: 2.18
+val_acc: 34.87
+test_loss: 2.19
+test_acc: 34.43
+
+ESP-ENG.csv: ESEN__01-99_1
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+Early stopping reached at epoch 92
+epoch_idx: 91
+early_stopping_step: 5
+early_stopping_best_val: 2.03
+train_loss: 1.56
+train_acc: 49.11
+val_loss: 2.20
+val_acc: 35.22
+test_loss: 2.22
+test_acc: 34.50
+
+ESP-ENG.csv: ESEN__01-99_2
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 1
+early_stopping_best_val: 2.03
+train_loss: 1.55
+train_acc: 49.51
+val_loss: 2.20
+val_acc: 34.90
+test_loss: 2.21
+test_acc: 34.42
+
+ESP-ENG.csv: ESEN__01-99_3
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 1
+early_stopping_best_val: 2.03
+train_loss: 1.54
+train_acc: 49.84
+val_loss: 2.22
+val_acc: 34.99
+test_loss: 2.23
+test_acc: 34.18
+
+ESP-ENG.csv: ESEN__01-99_4
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 2
+early_stopping_best_val: 2.04
+train_loss: 1.54
+train_acc: 49.73
+val_loss: 2.22
+val_acc: 34.80
+test_loss: 2.23
+test_acc: 34.23
+
+ESP-ENG.csv: ESEN__20-80_0
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 1
+early_stopping_best_val: 1.92
+train_loss: 1.58
+train_acc: 48.25
+val_loss: 2.06
+val_acc: 36.65
+test_loss: 2.06
+test_acc: 36.20
+
+ESP-ENG.csv: ESEN__20-80_1
+
+10
+20
+30
+40
+50
+Early stopping reached at epoch 56
+epoch_idx: 55
+early_stopping_step: 5
+early_stopping_best_val: 1.92
+train_loss: 1.71
+train_acc: 44.22
+val_loss: 1.95
+val_acc: 37.17
+test_loss: 1.95
+test_acc: 36.92
+
+ESP-ENG.csv: ESEN__20-80_2
+
+10
+20
+30
+40
+50
+60
+Early stopping reached at epoch 68
+epoch_idx: 67
+early_stopping_step: 5
+early_stopping_best_val: 1.92
+train_loss: 1.65
+train_acc: 45.85
+val_loss: 1.98
+val_acc: 37.20
+test_loss: 1.98
+test_acc: 36.66
+
+ESP-ENG.csv: ESEN__20-80_3
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 1
+early_stopping_best_val: 1.91
+train_loss: 1.57
+train_acc: 48.60
+val_loss: 2.05
+val_acc: 36.97
+test_loss: 2.04
+test_acc: 36.30
+
+ESP-ENG.csv: ESEN__20-80_4
+
+10
+20
+30
+40
+Early stopping reached at epoch 43
+epoch_idx: 42
+early_stopping_step: 5
+early_stopping_best_val: 1.92
+train_loss: 1.76
+train_acc: 42.64
+val_loss: 1.93
+val_acc: 37.38
+test_loss: 1.92
+test_acc: 37.07
+
+ESP-ENG.csv: ESEN__40-60_0
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 4
+early_stopping_best_val: 1.90
+train_loss: 1.59
+train_acc: 47.69
+val_loss: 2.02
+val_acc: 37.32
+test_loss: 2.01
+test_acc: 36.84
+
+ESP-ENG.csv: ESEN__40-60_1
+
+10
+20
+30
+40
+50
+60
+70
+Early stopping reached at epoch 75
+epoch_idx: 74
+early_stopping_step: 5
+early_stopping_best_val: 1.89
+train_loss: 1.65
+train_acc: 45.71
+val_loss: 1.95
+val_acc: 37.71
+test_loss: 1.95
+test_acc: 37.60
+
+ESP-ENG.csv: ESEN__40-60_2
+
+10
+20
+30
+40
+50
+60
+70
+Early stopping reached at epoch 77
+epoch_idx: 76
+early_stopping_step: 5
+early_stopping_best_val: 1.90
+train_loss: 1.64
+train_acc: 46.11
+val_loss: 1.97
+val_acc: 37.44
+test_loss: 1.95
+test_acc: 37.22
+
+ESP-ENG.csv: ESEN__40-60_3
+
+10
+20
+30
+40
+50
+60
+70
+Early stopping reached at epoch 79
+epoch_idx: 78
+early_stopping_step: 5
+early_stopping_best_val: 1.89
+train_loss: 1.64
+train_acc: 46.11
+val_loss: 1.96
+val_acc: 37.17
+test_loss: 1.96
+test_acc: 37.25
+
+ESP-ENG.csv: ESEN__40-60_4
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 1
+early_stopping_best_val: 1.89
+train_loss: 1.58
+train_acc: 47.92
+val_loss: 2.01
+val_acc: 37.60
+test_loss: 2.01
+test_acc: 37.24
+
+ESP-ENG.csv: ESEN__50-50_0
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 1
+early_stopping_best_val: 1.89
+train_loss: 1.58
+train_acc: 48.09
+val_loss: 2.02
+val_acc: 37.47
+test_loss: 2.01
+test_acc: 37.52
+
+ESP-ENG.csv: ESEN__50-50_1
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 0
+early_stopping_best_val: 1.89
+train_loss: 1.57
+train_acc: 48.00
+val_loss: 2.00
+val_acc: 37.54
+test_loss: 2.00
+test_acc: 37.48
+
+ESP-ENG.csv: ESEN__50-50_2
+
+10
+20
+30
+40
+50
+60
+70
+Early stopping reached at epoch 77
+epoch_idx: 76
+early_stopping_step: 5
+early_stopping_best_val: 1.89
+train_loss: 1.63
+train_acc: 46.24
+val_loss: 1.97
+val_acc: 37.71
+test_loss: 1.96
+test_acc: 37.42
+
+ESP-ENG.csv: ESEN__50-50_3
+
+10
+20
+30
+40
+50
+60
+Early stopping reached at epoch 63
+epoch_idx: 62
+early_stopping_step: 5
+early_stopping_best_val: 1.89
+train_loss: 1.69
+train_acc: 44.21
+val_loss: 1.92
+val_acc: 37.92
+test_loss: 1.92
+test_acc: 38.02
+
+ESP-ENG.csv: ESEN__50-50_4
+
+10
+20
+30
+40
+Early stopping reached at epoch 43
+epoch_idx: 42
+early_stopping_step: 5
+early_stopping_best_val: 1.89
+train_loss: 1.76
+train_acc: 42.12
+val_loss: 1.90
+val_acc: 38.52
+test_loss: 1.89
+test_acc: 38.18
+
+ESP-ENG.csv: ESEN__60-40_0
+
+10
+20
+30
+40
+50
+60
+70
+Early stopping reached at epoch 73
+epoch_idx: 72
+early_stopping_step: 5
+early_stopping_best_val: 1.90
+train_loss: 1.63
+train_acc: 46.07
+val_loss: 1.95
+val_acc: 37.86
+test_loss: 1.95
+test_acc: 37.85
+
+ESP-ENG.csv: ESEN__60-40_1
+
+10
+20
+30
+40
+50
+Early stopping reached at epoch 57
+epoch_idx: 56
+early_stopping_step: 5
+early_stopping_best_val: 1.89
+train_loss: 1.69
+train_acc: 44.32
+val_loss: 1.92
+val_acc: 38.45
+test_loss: 1.92
+test_acc: 38.03
+
+ESP-ENG.csv: ESEN__60-40_2
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 0
+early_stopping_best_val: 1.90
+train_loss: 1.55
+train_acc: 48.67
+val_loss: 2.01
+val_acc: 37.45
+test_loss: 2.01
+test_acc: 37.63
+
+ESP-ENG.csv: ESEN__60-40_3
+
+10
+20
+30
+40
+50
+60
+70
+Early stopping reached at epoch 73
+epoch_idx: 72
+early_stopping_step: 5
+early_stopping_best_val: 1.90
+train_loss: 1.63
+train_acc: 46.21
+val_loss: 1.96
+val_acc: 37.54
+test_loss: 1.95
+test_acc: 37.72
+
+ESP-ENG.csv: ESEN__60-40_4
+
+10
+20
+30
+40
+50
+60
+Early stopping reached at epoch 69
+epoch_idx: 68
+early_stopping_step: 5
+early_stopping_best_val: 1.90
+train_loss: 1.64
+train_acc: 45.69
+val_loss: 1.94
+val_acc: 37.94
+test_loss: 1.94
+test_acc: 37.77
+
+ESP-ENG.csv: ESEN__80-20_0
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 1
+early_stopping_best_val: 1.94
+train_loss: 1.51
+train_acc: 49.63
+val_loss: 2.08
+val_acc: 37.03
+test_loss: 2.04
+test_acc: 37.34
+
+ESP-ENG.csv: ESEN__80-20_1
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+Early stopping reached at epoch 100
+epoch_idx: 99
+early_stopping_step: 5
+early_stopping_best_val: 1.94
+train_loss: 1.52
+train_acc: 49.53
+val_loss: 2.10
+val_acc: 36.81
+test_loss: 2.08
+test_acc: 37.02
+
+ESP-ENG.csv: ESEN__80-20_2
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 1
+early_stopping_best_val: 1.94
+train_loss: 1.52
+train_acc: 49.42
+val_loss: 2.10
+val_acc: 36.82
+test_loss: 2.07
+test_acc: 37.13
+
+ESP-ENG.csv: ESEN__80-20_3
+
+10
+20
+30
+40
+50
+60
+70
+80
+Early stopping reached at epoch 85
+epoch_idx: 84
+early_stopping_step: 5
+early_stopping_best_val: 1.94
+train_loss: 1.55
+train_acc: 48.42
+val_loss: 2.04
+val_acc: 37.20
+test_loss: 2.02
+test_acc: 37.56
+
+ESP-ENG.csv: ESEN__80-20_4
+
+10
+20
+30
+40
+50
+Early stopping reached at epoch 55
+epoch_idx: 54
+early_stopping_step: 5
+early_stopping_best_val: 1.94
+train_loss: 1.65
+train_acc: 44.87
+val_loss: 1.97
+val_acc: 37.32
+test_loss: 1.95
+test_acc: 37.61
+
+ESP-ENG.csv: ESEN__99-01_0
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 0
+early_stopping_best_val: 2.20
+train_loss: 1.43
+train_acc: 51.53
+val_loss: 2.45
+val_acc: 35.11
+test_loss: 2.43
+test_acc: 35.52
+
+ESP-ENG.csv: ESEN__99-01_1
+
+10
+20
+30
+40
+50
+60
+70
+Early stopping reached at epoch 72
+epoch_idx: 71
+early_stopping_step: 5
+early_stopping_best_val: 2.18
+train_loss: 1.49
+train_acc: 49.22
+val_loss: 2.36
+val_acc: 35.57
+test_loss: 2.33
+test_acc: 35.76
+
+ESP-ENG.csv: ESEN__99-01_2
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 1
+early_stopping_best_val: 2.20
+train_loss: 1.42
+train_acc: 51.75
+val_loss: 2.47
+val_acc: 35.36
+test_loss: 2.45
+test_acc: 35.51
+
+ESP-ENG.csv: ESEN__99-01_3
+
+10
+20
+30
+40
+50
+Early stopping reached at epoch 51
+epoch_idx: 50
+early_stopping_step: 5
+early_stopping_best_val: 2.20
+train_loss: 1.57
+train_acc: 46.89
+val_loss: 2.26
+val_acc: 35.65
+test_loss: 2.24
+test_acc: 36.06
+
+ESP-ENG.csv: ESEN__99-01_4
+
+10
+20
+30
+40
+50
+60
+70
+Early stopping reached at epoch 75
+epoch_idx: 74
+early_stopping_step: 5
+early_stopping_best_val: 2.19
+train_loss: 1.48
+train_acc: 49.68
+val_loss: 2.37
+val_acc: 34.95
+test_loss: 2.33
+test_acc: 35.70
+
+ESP-EUS.csv: ESEU__01-99_0
+
+10
+20
+30
+40
+50
+Early stopping reached at epoch 58
+epoch_idx: 57
+early_stopping_step: 5
+early_stopping_best_val: 2.07
+train_loss: 1.61
+train_acc: 46.86
+val_loss: 2.11
+val_acc: 36.19
+test_loss: 2.08
+test_acc: 36.56
+
+ESP-EUS.csv: ESEU__01-99_1
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+Early stopping reached at epoch 92
+epoch_idx: 91
+early_stopping_step: 5
+early_stopping_best_val: 2.07
+train_loss: 1.51
+train_acc: 50.12
+val_loss: 2.21
+val_acc: 36.07
+test_loss: 2.19
+test_acc: 35.92
+
+ESP-EUS.csv: ESEU__01-99_2
+
+10
+20
+30
+40
+50
+60
+70
+Early stopping reached at epoch 76
+epoch_idx: 75
+early_stopping_step: 5
+early_stopping_best_val: 2.06
+train_loss: 1.55
+train_acc: 48.71
+val_loss: 2.16
+val_acc: 36.02
+test_loss: 2.13
+test_acc: 36.37
+
+ESP-EUS.csv: ESEU__01-99_3
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 0
+early_stopping_best_val: 2.06
+train_loss: 1.49
+train_acc: 50.74
+val_loss: 2.22
+val_acc: 36.03
+test_loss: 2.19
+test_acc: 36.40
+
+ESP-EUS.csv: ESEU__01-99_4
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 1
+early_stopping_best_val: 2.06
+train_loss: 1.49
+train_acc: 50.59
+val_loss: 2.23
+val_acc: 35.74
+test_loss: 2.20
+test_acc: 36.20
+
+ESP-EUS.csv: ESEU__20-80_0
+
+10
+20
+30
+40
+50
+60
+Early stopping reached at epoch 62
+epoch_idx: 61
+early_stopping_step: 5
+early_stopping_best_val: 1.90
+train_loss: 1.65
+train_acc: 45.83
+val_loss: 1.93
+val_acc: 38.35
+test_loss: 1.90
+test_acc: 38.49
+
+ESP-EUS.csv: ESEU__20-80_1
+
+10
+20
+30
+40
+50
+60
+70
+80
+Early stopping reached at epoch 81
+epoch_idx: 80
+early_stopping_step: 5
+early_stopping_best_val: 1.90
+train_loss: 1.57
+train_acc: 48.41
+val_loss: 1.98
+val_acc: 38.15
+test_loss: 1.96
+test_acc: 38.40
+
+ESP-EUS.csv: ESEU__20-80_2
+
+10
+20
+30
+40
+50
+60
+Early stopping reached at epoch 69
+epoch_idx: 68
+early_stopping_step: 5
+early_stopping_best_val: 1.90
+train_loss: 1.62
+train_acc: 46.69
+val_loss: 1.95
+val_acc: 37.84
+test_loss: 1.92
+test_acc: 38.26
+
+ESP-EUS.csv: ESEU__20-80_3
+
+10
+20
+30
+40
+50
+60
+70
+Early stopping reached at epoch 72
+epoch_idx: 71
+early_stopping_step: 5
+early_stopping_best_val: 1.90
+train_loss: 1.60
+train_acc: 47.47
+val_loss: 1.96
+val_acc: 38.54
+test_loss: 1.93
+test_acc: 38.48
+
+ESP-EUS.csv: ESEU__20-80_4
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 1
+early_stopping_best_val: 1.90
+train_loss: 1.54
+train_acc: 49.36
+val_loss: 2.02
+val_acc: 37.85
+test_loss: 1.99
+test_acc: 38.31
+
+ESP-EUS.csv: ESEU__40-60_0
+
+10
+20
+30
+40
+50
+Early stopping reached at epoch 50
+epoch_idx: 49
+early_stopping_step: 5
+early_stopping_best_val: 1.87
+train_loss: 1.71
+train_acc: 43.68
+val_loss: 1.88
+val_acc: 38.64
+test_loss: 1.86
+test_acc: 39.16
+
+ESP-EUS.csv: ESEU__40-60_1
+
+10
+20
+30
+40
+50
+Early stopping reached at epoch 51
+epoch_idx: 50
+early_stopping_step: 5
+early_stopping_best_val: 1.87
+train_loss: 1.70
+train_acc: 43.93
+val_loss: 1.89
+val_acc: 38.60
+test_loss: 1.87
+test_acc: 38.72
+
+ESP-EUS.csv: ESEU__40-60_2
+
+10
+20
+30
+40
+50
+60
+70
+80
+Early stopping reached at epoch 89
+epoch_idx: 88
+early_stopping_step: 5
+early_stopping_best_val: 1.87
+train_loss: 1.57
+train_acc: 48.41
+val_loss: 1.97
+val_acc: 38.20
+test_loss: 1.94
+test_acc: 38.79
+
+ESP-EUS.csv: ESEU__40-60_3
+
+10
+20
+30
+40
+50
+60
+70
+Early stopping reached at epoch 73
+epoch_idx: 72
+early_stopping_step: 5
+early_stopping_best_val: 1.87
+train_loss: 1.62
+train_acc: 46.68
+val_loss: 1.94
+val_acc: 38.21
+test_loss: 1.91
+test_acc: 38.46
+
+ESP-EUS.csv: ESEU__40-60_4
+
+10
+20
+30
+40
+50
+60
+Early stopping reached at epoch 63
+epoch_idx: 62
+early_stopping_step: 5
+early_stopping_best_val: 1.87
+train_loss: 1.65
+train_acc: 45.56
+val_loss: 1.91
+val_acc: 38.60
+test_loss: 1.89
+test_acc: 38.98
+
+ESP-EUS.csv: ESEU__50-50_0
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+Early stopping reached at epoch 96
+epoch_idx: 95
+early_stopping_step: 5
+early_stopping_best_val: 1.87
+train_loss: 1.56
+train_acc: 48.61
+val_loss: 1.97
+val_acc: 38.37
+test_loss: 1.96
+test_acc: 38.19
+
+ESP-EUS.csv: ESEU__50-50_1
+
+10
+20
+30
+40
+50
+60
+70
+80
+Early stopping reached at epoch 83
+epoch_idx: 82
+early_stopping_step: 5
+early_stopping_best_val: 1.86
+train_loss: 1.58
+train_acc: 47.83
+val_loss: 1.95
+val_acc: 38.39
+test_loss: 1.94
+test_acc: 38.44
+
+ESP-EUS.csv: ESEU__50-50_2
+
+10
+20
+30
+40
+50
+Early stopping reached at epoch 57
+epoch_idx: 56
+early_stopping_step: 5
+early_stopping_best_val: 1.87
+train_loss: 1.67
+train_acc: 44.73
+val_loss: 1.89
+val_acc: 38.81
+test_loss: 1.88
+test_acc: 38.85
+
+ESP-EUS.csv: ESEU__50-50_3
+
+10
+20
+30
+40
+50
+60
+Early stopping reached at epoch 66
+epoch_idx: 65
+early_stopping_step: 5
+early_stopping_best_val: 1.87
+train_loss: 1.64
+train_acc: 45.87
+val_loss: 1.91
+val_acc: 38.52
+test_loss: 1.89
+test_acc: 38.86
+
+ESP-EUS.csv: ESEU__50-50_4
+
+10
+20
+30
+40
+50
+60
+Early stopping reached at epoch 68
+epoch_idx: 67
+early_stopping_step: 5
+early_stopping_best_val: 1.87
+train_loss: 1.64
+train_acc: 45.97
+val_loss: 1.91
+val_acc: 38.52
+test_loss: 1.89
+test_acc: 38.91
+
+ESP-EUS.csv: ESEU__60-40_0
+
+10
+20
+30
+40
+50
+60
+70
+80
+Early stopping reached at epoch 86
+epoch_idx: 85
+early_stopping_step: 5
+early_stopping_best_val: 1.87
+train_loss: 1.57
+train_acc: 48.38
+val_loss: 1.96
+val_acc: 38.18
+test_loss: 1.94
+test_acc: 38.55
+
+ESP-EUS.csv: ESEU__60-40_1
+
+10
+20
+30
+40
+50
+60
+70
+Early stopping reached at epoch 77
+epoch_idx: 76
+early_stopping_step: 5
+early_stopping_best_val: 1.87
+train_loss: 1.60
+train_acc: 47.25
+val_loss: 1.95
+val_acc: 38.08
+test_loss: 1.93
+test_acc: 38.35
+
+ESP-EUS.csv: ESEU__60-40_2
+
+10
+20
+30
+40
+50
+60
+Early stopping reached at epoch 64
+epoch_idx: 63
+early_stopping_step: 5
+early_stopping_best_val: 1.88
+train_loss: 1.64
+train_acc: 45.77
+val_loss: 1.92
+val_acc: 37.82
+test_loss: 1.90
+test_acc: 38.43
+
+ESP-EUS.csv: ESEU__60-40_3
+
+10
+20
+30
+40
+50
+60
+Early stopping reached at epoch 60
+epoch_idx: 59
+early_stopping_step: 5
+early_stopping_best_val: 1.87
+train_loss: 1.65
+train_acc: 45.35
+val_loss: 1.91
+val_acc: 38.39
+test_loss: 1.89
+test_acc: 38.55
+
+ESP-EUS.csv: ESEU__60-40_4
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+Early stopping reached at epoch 93
+epoch_idx: 92
+early_stopping_step: 5
+early_stopping_best_val: 1.87
+train_loss: 1.54
+train_acc: 49.06
+val_loss: 1.98
+val_acc: 37.96
+test_loss: 1.97
+test_acc: 38.01
+
+ESP-EUS.csv: ESEU__80-20_0
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+Early stopping reached at epoch 99
+epoch_idx: 98
+early_stopping_step: 5
+early_stopping_best_val: 1.91
+train_loss: 1.50
+train_acc: 49.94
+val_loss: 2.06
+val_acc: 37.18
+test_loss: 2.04
+test_acc: 37.39
+
+ESP-EUS.csv: ESEU__80-20_1
+
+10
+20
+30
+40
+50
+60
+70
+80
+Early stopping reached at epoch 85
+epoch_idx: 84
+early_stopping_step: 5
+early_stopping_best_val: 1.90
+train_loss: 1.55
+train_acc: 48.46
+val_loss: 2.00
+val_acc: 37.69
+test_loss: 1.99
+test_acc: 37.41
+
+ESP-EUS.csv: ESEU__80-20_2
+
+10
+20
+30
+40
+50
+Early stopping reached at epoch 58
+epoch_idx: 57
+early_stopping_step: 5
+early_stopping_best_val: 1.90
+train_loss: 1.63
+train_acc: 45.63
+val_loss: 1.95
+val_acc: 37.41
+test_loss: 1.94
+test_acc: 37.84
+
+ESP-EUS.csv: ESEU__80-20_3
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 1
+early_stopping_best_val: 1.90
+train_loss: 1.50
+train_acc: 50.06
+val_loss: 2.06
+val_acc: 37.20
+test_loss: 2.04
+test_acc: 36.99
+
+ESP-EUS.csv: ESEU__80-20_4
+
+10
+20
+30
+40
+50
+60
+70
+80
+Early stopping reached at epoch 82
+epoch_idx: 81
+early_stopping_step: 5
+early_stopping_best_val: 1.90
+train_loss: 1.55
+train_acc: 48.12
+val_loss: 2.00
+val_acc: 37.57
+test_loss: 1.98
+test_acc: 37.66
+
+ESP-EUS.csv: ESEU__99-01_0
+
+10
+20
+30
+40
+50
+60
+Early stopping reached at epoch 65
+epoch_idx: 64
+early_stopping_step: 5
+early_stopping_best_val: 2.16
+train_loss: 1.53
+train_acc: 48.10
+val_loss: 2.25
+val_acc: 35.05
+test_loss: 2.24
+test_acc: 35.38
+
+ESP-EUS.csv: ESEU__99-01_1
+
+10
+20
+30
+40
+Early stopping reached at epoch 45
+epoch_idx: 44
+early_stopping_step: 5
+early_stopping_best_val: 2.16
+train_loss: 1.59
+train_acc: 45.95
+val_loss: 2.20
+val_acc: 35.13
+test_loss: 2.19
+test_acc: 34.91
+
+ESP-EUS.csv: ESEU__99-01_2
+
+10
+20
+30
+40
+50
+60
+70
+80
+Early stopping reached at epoch 84
+epoch_idx: 83
+early_stopping_step: 5
+early_stopping_best_val: 2.16
+train_loss: 1.47
+train_acc: 50.25
+val_loss: 2.35
+val_acc: 34.49
+test_loss: 2.34
+test_acc: 34.60
+
+ESP-EUS.csv: ESEU__99-01_3
+
+10
+20
+30
+40
+50
+60
+70
+Early stopping reached at epoch 73
+epoch_idx: 72
+early_stopping_step: 5
+early_stopping_best_val: 2.16
+train_loss: 1.50
+train_acc: 49.19
+val_loss: 2.31
+val_acc: 35.08
+test_loss: 2.29
+test_acc: 35.01
+
+ESP-EUS.csv: ESEU__99-01_4
+
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+epoch_idx: 99
+early_stopping_step: 0
+early_stopping_best_val: 2.16
+train_loss: 1.43
+train_acc: 51.59
+val_loss: 2.42
+val_acc: 34.67
+test_loss: 2.42
+test_acc: 34.66
