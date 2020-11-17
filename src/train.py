@@ -19,8 +19,8 @@ args = Namespace(
     csv='../processed_data/',
     vectorizer_file="../processed_data/vectorizer.json",
     model_checkpoint_file='/models/checkpoints/',
-    model_save_file='models/param_search/',
-    hidden_dims=[64, 128, 256, 512],
+    model_save_file='models/',
+    hidden_dims=128,
     n_lstm_layers=1,
     drop_p=0.1,
     n_epochs=100,
@@ -41,7 +41,7 @@ utils.set_all_seeds(args.seed, args.device)
 print(args.device)
 
 for data, category in zip(args.datafiles, args.modelfiles):
-    for prob in [50, 99]:
+    for prob in args.probs:
         end = f"{prob:02}-{100-prob:02}"
 
         df = pd.read_csv(args.csv + data)
@@ -51,17 +51,14 @@ for data, category in zip(args.datafiles, args.modelfiles):
         dataset = utils.TextDataset.make_text_dataset(df, vectorizer,
                                                       p=prob/100, seed=args.seed)
 
-        # for run in range(args.n_runs):
+        for run in range(args.n_runs):
+            m_name = f"{category}{end}"
 
-        for hidden_units in args.hidden_dims:
-            m_name = f"{category}_{hidden_units}_{end}"
-
-            run = 0
             print(f"\n{data}: {m_name}_{run}\n")
 
             model = PolyChar(
                 n_in=len(vectorizer.data_vocab),
-                n_hidden=hidden_units,
+                n_hidden=args.hidden_dims,
                 n_layers=args.n_lstm_layers,
                 n_out=len(vectorizer.data_vocab),
                 drop_p=args.drop_p
@@ -72,9 +69,7 @@ for data, category in zip(args.datafiles, args.modelfiles):
 
             optimizer = torch.optim.Adam(
                 model.parameters(), lr=args.learning_rate)
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer,
-                                                                   mode='min', factor=0.5,
-                                                                   patience=2)
+
             # %% Training loop
             train_state = utils.make_train_state()
 
@@ -164,8 +159,6 @@ for data, category in zip(args.datafiles, args.modelfiles):
                                        f"{m_name}/{m_name}_{run}" + ".pt")
                             train_state['early_stopping_best_val'] = loss_t
                         train_state['early_stopping_step'] = 0
-
-                scheduler.step(train_state['val_loss'][-1])
 
                 if train_state['early_stopping_step'] >= args.early_stopping_patience:
                     print(f"Early stopping reached at epoch {it+1}")
