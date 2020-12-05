@@ -16,7 +16,9 @@ import torch
 import string
 import numpy as np
 import pandas as pd
+import torch.nn.functional as F
 
+from collections import defaultdict
 from itertools import product
 from collections import Counter
 from torch.utils.data import DataLoader
@@ -118,14 +120,60 @@ def print_state_dict(train_state):
         else:
             print(f"{k}: {v}")
 
-    # print((f"Epoch: {train_state['epoch_idx'] + 1} | "
-    #        f"train_loss: {train_state['train_loss'][-1]:.4f} | "
-    #        f"val_loss: {train_state['val_loss'][-1]:.4f}\n"
-    #        f"train_acc_chars: {train_state['train_acc'][-1]:.2f} | "
-    #        # f"train_acc_lang: {train_state['train_lang_acc'][-1]:.2f}\n"
-    #        f"val_acc_chars: {train_state['val_acc'][-1]:.2f} | "
-    #        # f"val_acc_lang: {train_state['val_lang_acc'][-1]:.2f}\n"
-    #        ))
+
+def get_distribution_from_context(model, context, vectorizer, device='cpu',
+                                  softmax=True):
+    model.to(device)
+    hidden = model.initHidden(1, device)
+    model.eval()
+    f_v, _ = vectorizer.vectorize(context)
+    f_v = f_v.to(device)
+    out, hidden = model(f_v.unsqueeze(0), hidden)
+    dist = torch.flatten(out.detach()[:,-1, :])    
+    # Take only valid continuations (letters + SOS)
+    ret = torch.empty(27)
+    ret[:-1] = dist[:-3]
+    ret[-1] = dist[-2]
+    if softmax:
+        ret = F.softmax(ret, dim=0)
+
+    return ret.numpy()
+
+
+def eval_distributions(model, trie, vectorizer, metrics, vocab_len=27):
+    total_met = defaultdict(float)
+    total_eval = 0
+    q = [trie.root]
+    while q:
+        p = []
+        curr = q.pop(0)
+        cnt = 0
+        for ch in range(vocab_len):
+            if curr.children[ch]:
+                q.append(curr.children[ch])
+                p.append(curr.children[ch].prob)
+            else:
+                cnt += 1
+                p.append(0)
+        if cnt < vocab_len:
+            e_dist = np.float32(p)
+            context = curr.prefix
+            total_eval += 1
+            
+            if isinstance(model,CharNGram):
+                p_dist = model.get_distribution_from_context(context).values()
+                p_dist = np.float32(list(p_dist))
+            else:
+                p_dist = get_distribution_from_context(model, context,
+                                                       vectorizer)
+            
+            for metric, func in metrics.items():
+                total_met[metric] += func(e_dist, p_dist)
+    
+    for metric in metrics.keys():
+        total_met[metric] /= total_eval
+    
+    return total_met
 
 
 def sample_from_model(model, vectorizer, num_samples=1, sample_size=10,
@@ -555,7 +603,8 @@ class CharNGram(object):
     for models of order 5 and above.
     """
 
-    def __init__(self, data, n, laplace=1, SOS_token='<s>', EOS_token='</s>'):
+    def __init__(self, data=None, n=1, model=None, laplace=1,
+                 SOS_token='<s>', EOS_token='</s>'):
         """Data should be iterable of words
 
         Args:
@@ -566,16 +615,19 @@ class CharNGram(object):
             SOS_token (str): Start-of-Sequence token
             EOS_token (str): End-of-Sequence token
         """
-        assert (n > 0), n
         self.n = n
         self.laplace = laplace
         self.SOS_token = SOS_token
         self.EOS_token = EOS_token
-        self.data = data
         self.vocab = list(string.ascii_lowercase) + [SOS_token, EOS_token]
-        self.processed_data = self._preprocess(self.data, n)
-        self.ngrams = self._split_and_count(self.processed_data, self.n)
-        self.model = self._smooth()
+
+        if data is not None:
+            self.data = data
+            self.processed_data = self._preprocess(self.data, n)
+            self.ngrams = self._split_and_count(self.processed_data, self.n)
+            self.model = self._smooth()
+        elif model is not None:
+            self.model = model
 
     def _preprocess(self, data, n):
         """Private method to preprocess a dataset of documents
@@ -711,14 +763,16 @@ class CharNGram(object):
             for ngram, value in self.model.items():
                 file.write(f"{' '.join(ngram)}\t{value}\n")
 
-    def from_txt(self, filepath):
+    @classmethod
+    def from_txt(cls, filepath):
         """Reads model from a tab separated txt file"""
         with open(filepath, 'r') as file:
             data = file.readlines()
-        self.model = Counter()
+        model = Counter()
         for ngram, value in data.split('\t'):
-            self.model[tuple(ngram.split(' '))] = value
-        self.n = len(self.model.keys()[0])
+            model[tuple(ngram.split(' '))] = value
+        n = len(model.keys()[0])
+        return cls(model, n)
 
     def to_df(self):
         """Creates a DataFrame from Counter of ngrams
@@ -890,8 +944,6 @@ class CharNGram(object):
         return f"<{self.n}-gram model(size={len(self)})>"
 
 # %% Trie
-
-
 class TrieNode(object):
     """Node for the Trie class"""
 
@@ -912,22 +964,23 @@ class Trie(object):
     which is used for retrieval of a key in a dataset of strings.
     """
 
-    def __init__(self, vocab_len=27):
+    def __init__(self, vocab_len=27, EOS='$'):
         """
         Args:
             vocab_len (int): length of the vocabulary
         """
         self.vocab_len = vocab_len
         self.root = TrieNode(vocab_len=vocab_len)
+        self.EOS = EOS
 
     def _ord(self, c):
         """Private method to get index from character"""
-        if c == '</s>':
+        if c == self.EOS:
             ret = self.vocab_len - 1
         else:
             ret = ord(c) - ord('a')
 
-        if not 0 <= ret <= self.vocab_len:
+        if not 0 <= ret < self.vocab_len:
             raise KeyError(f"Character index {ret} not in vocabulary")
         else:
             return ret
@@ -948,7 +1001,14 @@ class Trie(object):
             curr = curr.children[i]
             curr.prefix = context + [c]
             curr.cnt += 1
-
+        
+        # if not curr.children[self.vocab_len-1]:
+        #     curr.children[self.vocab_len-1] = TrieNode(vocab_len=self.vocab_len)
+        # context = curr.prefix
+        # curr = curr.children[self.vocab_len-1]
+        # curr.context = context + [self.EOS]
+        # curr.cnt += 1
+        
         curr.finished = True
 
     def insert_many(self, wordlist):
@@ -972,14 +1032,16 @@ class Trie(object):
         return curr.finished
 
     def starts_with(self, prefix):
-        """Returns True if prefix is in Trie"""
+        """Returns len of prefix if prefix is in Trie otherwise return last 
+        legal character
+        """
         curr = self.root
         for c in prefix:
             i = self._ord(c)
             if not curr.children[i]:
-                return False
+                return c
             curr = curr.children[i]
-        return True
+        return len(prefix)
 
     def calculate_probabilities(self, node=None):
         """Calculates the probability of different prefixes"""
@@ -1002,9 +1064,8 @@ class Trie(object):
             curr = curr.children[i]
         p = [0.0] * self.vocab_len
         for i in range(self.vocab_len):
-            if not curr.children[i]:
-                continue
-            p[i] = curr.children[i].prob
+            if curr.children[i]:
+                p[i] = curr.children[i].prob
         return p
 
     def print_empirical_distribution(self):

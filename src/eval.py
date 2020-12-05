@@ -42,7 +42,7 @@ args = Namespace(
     device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu'),
     seed=404
 )
-
+utils.set_all_seeds(args.seed, args.device)
 # %% Helper
 
 
@@ -139,19 +139,19 @@ for data, category in zip(args.datafiles, args.modelfiles):
         vectorizer = dataset.get_vectorizer()
 
         train_words = list(dataset.train_df.data)
-        trie_train = utils.Trie()
-        trie_train.insert_many([list(w) + ['</s>'] for w in train_words])
+        # trie_train = utils.Trie()
+        # trie_train.insert_many([list(w) + ['</s>'] for w in train_words])
 
         test_words = list(dataset.test_df.data)
-        trie_test = utils.Trie()
-        trie_test.insert_many([list(w) + ['</s>'] for w in test_words])
+        # trie_test = utils.Trie()
+        # trie_test.insert_many([list(w) + ['</s>'] for w in test_words])
 
         for run in range(args.n_runs):
             print(f"\n{data}: {m_name}_{run}\n")
 
             # Get N-gram models with different laplace constant
             ngrams = {}
-            for n in range(2, 6):
+            for n in range(2, 5):
                 ngrams[f"{n}-gram"] = utils.CharNGram(train_words, n,
                                                       laplace=(run + 1) * 0.2)
 
@@ -239,6 +239,7 @@ for data, category in zip(args.datafiles, args.modelfiles):
 
 results = pd.DataFrame(tmp)
 
+# %% Plots
 exp_data = results[['model', 'prob', 'data', 'run', 'ES-', 'ES+']]
 exp_data = pd.melt(exp_data, id_vars=['model', 'prob', 'data', 'run'],
                    value_vars=['ES-', 'ES+'])
@@ -270,7 +271,7 @@ results_acc['split'] = np.where(
 
 g = sns.catplot(x="model", y="acc", hue="split", hue_order=['train', 'test'],
                 row="data", col='prob', kind='bar',
-                data=results_acc, palette="Reds")
+                data=results_acc, palette="Greens")
 g.set(ylim=(0, 50))
 
 results_perp = pd.melt(
@@ -290,11 +291,11 @@ results_perp['split'] = np.where(
 
 g = sns.catplot(x="model", y="perp", hue="split", hue_order=['train', 'test'],
                 row="data", col='prob', kind='bar',
-                data=results_perp, palette="Reds")
+                data=results_perp, palette="Greens")
 g.set(ylim=(0, 15))
 
 sns.catplot(x="prob", y="value", hue="variable", row="data", col="model",
-            data=exp_data, kind="bar", palette="Reds")
+            data=exp_data, kind="bar", palette="Greens")
 
 # results_kl = pd.melt(results_data, id_vars=['model', 'prob', 'data', 'run'],
 #                       value_vars=['KL_train', 'KL_test'], var_name='split',
@@ -306,129 +307,249 @@ sns.catplot(x="prob", y="value", hue="variable", row="data", col="model",
 # g = sns.catplot(x="prob", y="KL", hue="model", row="data", col='split', kind='point',
 # data=results_kl, palette="Reds", ci='sd', linestyles=['-', '--']*5)
 
-# %% Distribution of last character
-# TODO Compare distribution of last character in test words
-# Create a list of distributions for each word [len(test_words), len(vocab)]
-# Average the KL divergence/other distance metric over all the words in test
-# Plot
+# # %% Distribution of last character
+# # TODO Compare distribution of last character in test words
+# # Create a list of distributions for each word [len(test_words), len(vocab)]
+# # Average the KL divergence/other distance metric over all the words in test
+# # Plot
 
-for data, category in zip(args.datafiles, args.modelfiles):
-    for prob in args.probs:
-        end = f"{prob:02}-{100-prob:02}"
-        m_name = f"{category}{end}"
+# for data, category in zip(args.datafiles, args.modelfiles):
+#     for prob in args.probs:
+#         end = f"{prob:02}-{100-prob:02}"
+#         m_name = f"{category}{end}"
 
-        dataset = utils.TextDataset.load_dataset_and_make_vectorizer(
-            args.csv + data,
-            p=prob / 100, seed=args.seed)
-        vectorizer = dataset.get_vectorizer()
+#         dataset = utils.TextDataset.load_dataset_and_make_vectorizer(
+#             args.csv + data,
+#             p=prob / 100, seed=args.seed)
+#         vectorizer = dataset.get_vectorizer()
 
-        train_words = list(dataset.train_df.data)
-        trie_train = utils.Trie().insert_many(
-            [list(w) + '</s>' for w in train_words])
+#         train_words = list(dataset.train_df.data)
+#         trie_train = utils.Trie().insert_many(
+#             [list(w) + '</s>' for w in train_words])
 
-        test_words = list(dataset.test_df.data)
-        trie_test = utils.Trie().insert_many(
-            [list(w) + '</s>' for w in test_words])
+#         test_words = list(dataset.test_df.data)
+#         trie_test = utils.Trie().insert_many(
+#             [list(w) + '</s>' for w in test_words])
 
-        tmp = collections.defaultdict(list)
+#         tmp = collections.defaultdict(list)
 
-        for run in range(args.n_runs):
-            print(f"\n{data}: {m_name}_{run}\n")
+#         for run in range(args.n_runs):
+#             print(f"\n{data}: {m_name}_{run}\n")
 
-            # Get N-gram models with different laplace constant
-            ngrams = {}
-            for n in range(2, 5):
-                ngrams[f"{n}-gram"] = utils.CharNGram(train_words, n,
-                                                      laplace=(run + 1) * 0.2)
+#             # Get N-gram models with different laplace constant
+#             ngrams = {}
+#             for n in range(2, 5):
+#                 ngrams[f"{n}-gram"] = utils.CharNGram(train_words, n,
+#                                                       laplace=(run + 1) * 0.2)
 
-            for name, m in ngrams.items():
-                tmp["model"].append(name)
-                tmp["prob"].append(end)
-                tmp["data"].append(category[:-1])
-                tmp["run"].append(run)
-                tmp["accuracy_train"].append(m.calculate_accuracy(train_words))
-                tmp["perplexity_train"].append(m.perplexity(train_words))
-                tmp["accuracy"].append(m.calculate_accuracy(test_words))
-                tmp["perplexity"].append(m.perplexity(test_words))
-                tmp["KL_train"].append(
-                    calculate_divergence(
-                        train_words, trie_train, m))
-                tmp["KL_test"].append(
-                    calculate_divergence(
-                        test_words, trie_test, m))
+#             for name, m in ngrams.items():
+#                 tmp["model"].append(name)
+#                 tmp["prob"].append(end)
+#                 tmp["data"].append(category[:-1])
+#                 tmp["run"].append(run)
+#                 tmp["accuracy_train"].append(m.calculate_accuracy(train_words))
+#                 tmp["perplexity_train"].append(m.perplexity(train_words))
+#                 tmp["accuracy"].append(m.calculate_accuracy(test_words))
+#                 tmp["perplexity"].append(m.perplexity(test_words))
+#                 tmp["KL_train"].append(
+#                     calculate_divergence(
+#                         train_words, trie_train, m))
+#                 tmp["KL_test"].append(
+#                     calculate_divergence(
+#                         test_words, trie_test, m))
 
 
 # %% Hidden representation for each time-point for each word
 # First is necessary to run the readout.py file to produce the representations
 hidd_cols = [str(i) for i in range(args.hidden_dim)]
+h_cols = [f"hid_{i}" for i in hidd_cols]
+c_cols = [f"cel_{i}" for i in hidd_cols]
 
 res = defaultdict(list)
 
+metrics = {'Accuracy': mtr.accuracy_score, 'F1': mtr.f1_score,
+           'ROC_AUC': mtr.roc_auc_score}
+
+def pred_scores(X_train, X_test, y_train, y_test, clf, metrics):
+    le = LabelEncoder()
+    y_train = le.fit_transform(y_train)
+    y_test = le.transform(y_test)
+    
+    sc = StandardScaler()
+    X_train = sc.fit_transform(X_train)
+    X_test = sc.transform(X_test)
+    
+    clf.fit(X_train, y_train)
+    
+    preds = clf.predict(X_test)
+    
+    res = defaultdict(float)
+    for met, func in metrics.items():
+        if met == 'ROC_AUC':
+            res[met] = func(y_test, preds, average='weighted')
+        else:
+            res[met] = func(y_test, preds)
+    return res
+
 for data, category in zip(args.datafiles, args.modelfiles):
-    for prob in [50, 99]:
+    for prob in [50, 100]:
         end = f"{prob:02}-{100-prob:02}"
         m_name = f"{category}{end}"
-
-        dataset = pd.DataFrame()
+        
+        test_dataset = pd.DataFrame()
+        val_dataset = pd.DataFrame()
         for run in range(args.n_runs):
-            tmp = pd.read_json(f"{args.save_file}/hidden_{m_name}_{run}.json",
+            hdn = pd.read_json(f"{args.save_file}/val_hidden_{m_name}_{run}.json",
                                encoding='utf-8')
-            dataset = pd.concat([dataset, tmp], axis=0, ignore_index=True)
+            hdn.columns = list(hdn.columns)[:-128] + h_cols
+            cll = pd.read_json(f"{args.save_file}/val_cell_{m_name}_{run}.json",
+                               encoding='utf-8')
+            cll.columns = list(cll.columns)[:-128] + c_cols
+            tmp = pd.merge(hdn, cll, how='left',
+                               left_on=list(hdn.columns)[:-128],
+                               right_on=list(cll.columns)[:-128])
+            
+            val_dataset = pd.concat([val_dataset, tmp], axis=0,
+                                    ignore_index=True)
+            
+            hdn = pd.read_json(f"{args.save_file}/test_hidden_{m_name}_{run}.json",
+                               encoding='utf-8')
+            hdn.columns = list(hdn.columns)[:-128] + h_cols
+            cll = pd.read_json(f"{args.save_file}/test_cell_{m_name}_{run}.json",
+                               encoding='utf-8')
+            cll.columns = list(cll.columns)[:-128] + c_cols
+            tmp = pd.merge(hdn, cll, how='left',
+                               left_on=list(hdn.columns)[:-128],
+                               right_on=list(cll.columns)[:-128])
+            
+            test_dataset = pd.concat([test_dataset, tmp], axis=0, 
+                                     ignore_index=True)
 
         for run in range(args.n_runs):
-            train_data = dataset[dataset.run == run]
-            for T in range(10):
+            train_data = val_dataset[val_dataset.run == run]
+            test_data = test_dataset[test_dataset.run == run]
+            for T in range(11):
                 model_data = train_data[train_data.char == T]
+                model_test = test_data[test_data.char == T]
 
-                X = model_data[hidd_cols].values
-                y = model_data.label.values
-
-                y = LabelEncoder().fit_transform(y)
-
-                X_train, X_test, y_train, y_test = train_test_split(
-                    X, y, test_size=0.2, random_state=args.seed, stratify=y)
-                sc = StandardScaler()
-
-                X_train = sc.fit_transform(X_train)
-                X_test = sc.transform(X_test)
-                m = LogisticRegression(max_iter=10e9, random_state=args.seed)
-                m.fit(X_train, y_train)
-                preds = m.predict(X_test)
+                X_train1 = model_data[h_cols].values
+                X_train2 = model_data[c_cols].values
+                y_train = model_data.label.values
+                                
+                X_test1 = model_test[h_cols].values
+                X_test2 = model_test[c_cols].values
+                y_test = model_test.label.values
+                
+                m1 = m2 = LogisticRegression(max_iter=10e9,
+                                             random_state=args.seed)
+                
+                res_x1 = pred_scores(X_train1, X_test1, y_train, y_test, m1,
+                                     metrics)
+                res_x2 = pred_scores(X_train2, X_test2, y_train, y_test, m1,
+                                     metrics)
 
                 res['dataset'].append(category[:-1])
                 res['prob'].append(end)
                 res['run'].append(run)
                 res['char'].append(T)
-                res['Accuracy'].append(mtr.accuracy_score(y_test, preds))
-                res['F1'].append(mtr.f1_score(y_test, preds))
-                res['ROC_AUC'].append(mtr.roc_auc_score(y_test, preds,
-                                                        average='weighted'))
+                
+                for met, val in res_x1.items():
+                    res['hid_' + met].append(val)
+                
+                for met, val in res_x2.items():
+                    res['cel_' + met].append(val)
 
                 print(
-                    f"{m_name}_{run} char-{T}: {mtr.accuracy_score(y_test, preds):.2f}")
-
+                    f"{m_name}_{run} char-{T}: {res['hid_Accuracy'][-1]:.2f}")
+                
 res = pd.DataFrame(res)
 
-g = sns.catplot(x='char', y='ROC_AUC', hue='prob', row='dataset',
-                data=res, kind='point', palette='Reds', ci='sd')
-g.map(plt.axhline, y=0.5, ls='--')
-g._legend.remove()
+res.to_csv('backup_readout_prediction.csv', index=False, encoding='utf-8')       
 
-g = sns.catplot(x='char', y='Accuracy', hue='prob', row='dataset',
-                data=res, kind='point', palette='Reds', ci='sd')
-g.map(plt.axhline, y=0.5, ls='--')
-g._legend.remove()
+# %% Plots
+from scipy.stats import ttest_ind
 
-g = sns.catplot(x='char', y='F1', hue='prob', row='dataset',
-                data=res, kind='point', palette='Reds', ci='sd')
-g.set(ylim=(0, 1))
+readout = pd.read_csv('backup_readout_prediction.csv', encoding='utf-8')
+
+readout = readout[(readout.char > 0) & (readout.char < 11)]
+
+pivot = readout.pivot_table(index=['dataset', 'run', 'char'],
+                              columns='prob',
+                              values='hid_ROC_AUC').reset_index()
+for dtst in ['ESEN', 'ESEU']:
+    for ch in range(11):
+        tmp = pivot[(pivot.dataset == dtst) & (pivot.char == ch)]
+        _, pval = ttest_ind(tmp['50-50'], tmp['100-00'])
+        st = '*' if pval < 0.005 else 'n.s.'
+        print(f"{dtst}-{ch}: {st}")
+
+g = sns.catplot(x='char', y='hid_ROC_AUC', hue='prob', row='dataset',
+                data=readout, kind='point', palette='Reds', ci='sd')
+g.axes.flatten()[0].fill([1.5, 7.5, 7.5, 1.5], [0.5,0.5,1,1], 'k', alpha=0.2)
+g.axes.flatten()[0].set_ylabel('ROC_AUC', fontsize=15)
+g.axes.flatten()[1].fill([1.5, 9.1, 9.1, 1.5], [0.5,0.5,1,1], 'k', alpha=0.2)
+g.axes.flatten()[1].set_ylabel('ROC_AUC', fontsize=15)
+
+pivot = readout.pivot_table(index=['dataset', 'run', 'char'],
+                              columns='prob',
+                              values='hid_F1').reset_index()
+for dtst in ['ESEN', 'ESEU']:
+    for ch in range(11):
+        tmp = pivot[(pivot.dataset == dtst) & (pivot.char == ch)]
+        _, pval = ttest_ind(tmp['50-50'], tmp['100-00'])
+        st = '*' if pval < 0.005 else 'n.s.'
+        print(f"{dtst}-{ch}: {st}")
+
+g = sns.catplot(x='char', y='hid_F1', hue='prob', row='dataset',
+                data=readout, kind='point', palette='Reds', ci='sd')
+g.set(ylim=(0.5, 1))
+g.axes.flatten()[0].fill([1.5, 7.5, 7.5, 1.5], [0.5,0.5,1,1], 'k', alpha=0.2)
+g.axes.flatten()[0].set_ylabel('F1', fontsize=15)
+g.axes.flatten()[1].fill([1.5, 9.1, 9.1, 1.5], [0.5,0.5,1,1], 'k', alpha=0.2)
+g.axes.flatten()[1].set_ylabel('F1', fontsize=15)
+
+pivot = readout.pivot_table(index=['dataset', 'run', 'char'],
+                              columns='prob',
+                              values='cel_ROC_AUC').reset_index()
+for dtst in ['ESEN', 'ESEU']:
+    for ch in range(11):
+        tmp = pivot[(pivot.dataset == dtst) & (pivot.char == ch)]
+        _, pval = ttest_ind(tmp['50-50'], tmp['100-00'])
+        st = '*' if pval < 0.005 else 'n.s.'
+        print(f"{dtst}-{ch}: {st} {pval:.3f}")
+
+g = sns.catplot(x='char', y='cel_ROC_AUC', hue='prob', row='dataset',
+                data=readout, kind='point', palette='Blues', ci='sd')
+g.axes.flatten()[0].fill([1.5, 6.5, 6.5, 1.5], [0.5,0.5,1,1], 'k', alpha=0.2)
+g.axes.flatten()[0].set_ylabel('ROC_AUC', fontsize=15)
+g.axes.flatten()[1].fill([2.5, 8.5, 8.5, 2.5], [0.5,0.5,1,1], 'k', alpha=0.2)
+g.axes.flatten()[1].set_ylabel('ROC_AUC', fontsize=15)
+
+pivot = readout.pivot_table(index=['dataset', 'run', 'char'],
+                              columns='prob',
+                              values='cel_F1').reset_index()
+for dtst in ['ESEN', 'ESEU']:
+    for ch in range(11):
+        tmp = pivot[(pivot.dataset == dtst) & (pivot.char == ch)]
+        _, pval = ttest_ind(tmp['50-50'], tmp['100-00'])
+        st = '*' if pval < 0.005 else 'n.s.'
+        print(f"{dtst}-{ch}: {st}")
+
+g = sns.catplot(x='char', y='cel_F1', hue='prob', row='dataset',
+                data=readout, kind='point', palette='Blues', ci='sd')
+g.set(ylim=(0.5, 1))
+g.axes.flatten()[0].fill([2.5, 3.5, 3.5, 2.5], [0.5,0.5,1,1], 'k', alpha=0.2)
+g.axes.flatten()[0].fill([4.5, 7.5, 7.5, 4.5], [0.5,0.5,1,1], 'k', alpha=0.2)
+g.axes.flatten()[0].set_ylabel('F1', fontsize=15)
+g.axes.flatten()[1].fill([2.5, 8.5, 8.5, 2.5], [0.5,0.5,1,1], 'k', alpha=0.2)
+g.axes.flatten()[1].set_ylabel('F1', fontsize=15)
 
 # %% Clustering of hidden representations
 
 hidd_cols = [str(i) for i in range(args.hidden_dim)]
 
 for data, category in zip(args.datafiles, args.modelfiles):
-    for prob in [50, 99]:
+    for prob in [50, 100]:
         end = f"{prob:02}-{100-prob:02}"
         m_name = f"{category}{end}"
 
@@ -491,10 +612,12 @@ for data, category in zip(args.datafiles, args.modelfiles):
 # %% Use test words to mimic learning during the blocks
 eval_words = pd.read_csv(args.csv + 'exp_words.csv')
 
+utils.set_all_seeds(args.seed, args.device)
+
 res = defaultdict(list)
 for data, category in zip(args.datafiles, args.modelfiles):
-    for prob in [40, 50, 60, 99]:
-        if prob == 99 and category[:-1] == 'ESEU':
+    for prob in [50, 100]:
+        if prob == 100 and category[:-1] == 'ESEU':
             continue
         end = f"{prob:02}-{100-prob:02}"
         m_name = f"{category}{end}"
@@ -510,47 +633,70 @@ for data, category in zip(args.datafiles, args.modelfiles):
                                     f"{m_name}/{m_name}_{run}.pt")
 
             lstm_model.train()
-
+            lstm_model.to(args.device)
             loss_fn = nn.CrossEntropyLoss(
                 ignore_index=vectorizer.data_vocab.PAD_idx)
-            optim = torch.optim.Adam(
-                lstm_model.fc.parameters(),
-                lr=args.learning_rate)
+            optim = torch.optim.RMSprop(
+                lstm_model.parameters(),
+                lr=0.001)
+            
+            # for _ in range(2):
+            #     eval_words = eval_words.sample(frac=1)
+                
+            #     for word, lab in zip(eval_words.data, eval_words.label):
+            #         optim.zero_grad()
+            #         f_v, t_v = vectorizer.vectorize(word)
+            #         f_v, t_v = f_v.to(args.device), t_v.to(args.device)
+            #         hidden = lstm_model.initHidden(1, args.device)
+            #         out, _ = lstm_model(f_v.unsqueeze_(0), hidden)
+    
+            #         loss = loss_fn(*utils.normalize_sizes(out, t_v))
+            #         loss.backward()
+            #         optim.step()
+            
+            
             for it in range(5):
-                for word, lab in zip(eval_words.data, eval_words.label):
-                    f_v, t_v = vectorizer.vectorize(word)
-                    f_v, t_v = f_v.to(args.device), t_v.to(args.device)
-                    hidden = lstm_model.initHidden(1, args.device)
-                    out, _ = lstm_model(f_v.unsqueeze_(0), hidden)
-
-                    loss = loss_fn(*utils.normalize_sizes(out, t_v))
-                    loss.backward()
-                    optim.step()
-
-                    acc = utils.compute_accuracy(out, t_v,
-                                                 vectorizer.data_vocab.PAD_idx)
-
-                    if prob in [40, 50, 60]:
-                        if category[:-1] == 'ESEN':
-                            grp = 'ES-EN'
+                for tr in range(2):
+                    eval_words = eval_words.sample(frac=1)
+                    for word, lab in zip(eval_words.data, eval_words.label):
+                        optim.zero_grad()
+                        f_v, t_v = vectorizer.vectorize(word)
+                        f_v, t_v = f_v.to(args.device), t_v.to(args.device)
+                        hidden = lstm_model.initHidden(1, args.device)
+                        out, _ = lstm_model(f_v.unsqueeze_(0), hidden)
+    
+                        loss = loss_fn(*utils.normalize_sizes(out, t_v))
+                        loss.backward()
+                        optim.step()
+    
+                        acc = utils.compute_accuracy(out, t_v,
+                                                     vectorizer.data_vocab.PAD_idx)
+    
+                        if prob == 50:
+                            if category[:-1] == 'ESEN':
+                                grp = 'ES-EN'
+                            else:
+                                grp = 'ES-EU'
                         else:
-                            grp = 'ES-EU'
-                    else:
-                        grp = 'MONO'
-
-                    res['dataset'].append(category[:-1])
-                    res['prob'].append(end)
-                    res['run'].append(run)
-                    res['word'].append(word)
-                    res['pred'].append(utils.decode(out, vectorizer))
-                    res['Group'].append(grp)
-                    res['label'].append(lab)
-                    res['epoch'].append(it + 1)
-                    res['acc'].append(acc)
-                    res['loss'].append(loss.item())
+                            grp = 'MONO'
+    
+                        res['dataset'].append(category[:-1])
+                        res['prob'].append(end)
+                        res['run'].append(run)
+                        res['word'].append(word)
+                        res['Group'].append(grp)
+                        res['label'].append(lab)
+                        res['block'].append(it + 1)
+                        res['trl'].append(tr+1)
+                        res['acc'].append(acc)
+                        res['loss'].append(loss.item())
 
 
 res = pd.DataFrame(res)
 
-g = sns.catplot(x='epoch', y='acc', hue='Group', col='label',
-                data=res, kind='point', palette='Reds', ci=99)
+sns.set(style='whitegrid')
+
+g = sns.catplot(x='block', y='acc', hue='Group', hue_order=['MONO','ES-EN','ES-EU'],
+                col='label', col_order=['ES-', 'ES+'],
+                data=res, kind='point', ci=None)
+g.set(ylim=(0, 100))

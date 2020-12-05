@@ -4,34 +4,28 @@ Created on Thu Nov  5 11:02:36 2020
 
 @author: josea
 """
+import sys
+import os
+
+sys.path.append(os.path.abspath(".."))
+
 import utils
 import torch
-import math
-import torch.nn.functional as F
 import seaborn as sns
 import pandas as pd
-import collections
-import torch.nn as nn
 import numpy as np
-import string
+import matplotlib.pyplot as plt
 
+from scipy.spatial.distance import cosine, euclidean
 from argparse import Namespace
 from collections import defaultdict
 
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.linear_model import LogisticRegression
-from sklearn import metrics as mtr
-import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-
 args = Namespace(
-    csv='../processed_data/',
-    model_checkpoint_file='/models/checkpoints/',
-    save_file='hidden/',
-    model_save_file='models/',
+    csv='../../processed_data/',
+    model_save_file='../models/',
     datafiles=['ESP-ENG.csv', 'ESP-EUS.csv'],
     modelfiles=['ESEN_', 'ESEU_'],
-    probs=[1, 20, 40, 50, 60, 80, 99],
+    probs=[50, 100],
     n_runs=5,
     hidden_dim=128,
     learning_rate=0.001,
@@ -39,72 +33,48 @@ args = Namespace(
     seed=404
 )
 
+utils.set_all_seeds(args.seed, args.device)
 # %% Empirical evaluation
 
+def cosine_distance(dist1, dist2):
+    return cosine(dist1, dist2)
 
-def kl_divergence(dist1, dist2, adjustment=0):
-    if adjustment:
-        dist1 += adjustment
-        dist1 /= dist1.sum()
-        dist2 += adjustment
-        dist2 /= dist2.sum()
-        pos = [True] * len(dist1)
-    else:
-        pos = (dist1 != 0.) & (dist2 != 0.)
+def sse(dist1, dist2):
+    return euclidean(dist1, dist2)
+
+def kl_divergence(dist1, dist2):
+    pos = (dist1 != 0.) & (dist2 != 0.)
     return np.sum(dist1[pos] * (np.log2(dist1[pos]) - np.log2(dist2[pos])))
 
 
-def cosine_distance(dist1, dist2):
-    return dist1.dot(dist2) / (np.linalg.norm(dist1) * np.linalg.norm(dist2))
-
-
-def sse(dist1, dist2):
-    return np.square(dist2 - dist1).sum()
-
-
-def get_distribution_from_context(model, context, vectorizer, softmax=True):
-    hidden = model.initHidden(1, args.device)
-
-    for i, (f_v, t_v) in vectorizer.vectorize_single_char(context):
-        f_v = f_v.to(args.device)
-        out, hidden = model(f_v.unsqueeze(1), hidden)
-    dist = torch.flatten(out.detach()).to('cpu')
-    # Take only valid continuations (letters + SOS)
-    dist = dist[:-2] + dist[-1]
-
-    if softmax:
-        dist = F.softmax(dist, dim=0)
-
-    return dist.numpy()
-
-
+# %%
 def empirical_evaluation(args, metrics):
     res = defaultdict(list)
     for data, category in zip(args.datafiles, args.modelfiles):
-
-        df = pd.read_csv(args.csv + data)
-        vectorizer = utils.Vectorizer.from_df(df)
-
-        trie = utils.Trie()
-        trie.insert_many(list(df.data))
-
-        for prob in [50, 99]:
-
+        for prob in args.probs:
             end = f"{prob:02}-{100-prob:02}"
             m_name = f"{category}{end}"
 
             dataset = utils.TextDataset.load_dataset_and_make_vectorizer(
                 args.csv + data,
                 p=prob/100, seed=args.seed)
-
+            vectorizer = dataset.get_vectorizer()
+    
             train_words = list(dataset.train_df.data)
+            test_words = list(dataset.test_df.data)
+    
+            train_trie = utils.Trie()
+            train_trie.insert_many(train_words)
+            
+            test_trie = utils.Trie()
+            test_trie.insert_many(test_words)
 
             for run in range(args.n_runs):
                 print(f"\n{data}: {m_name}_{run}\n")
 
                 ngrams = {}
-                for n in range(2, 6):
-                    ngrams[f"{n}-gram"] = utils.CharNGram(train_words, n,
+                for n in range(2, 5):
+                    ngrams[f"{n}-gram"] = utils.CharNGram(data=train_words, n=n,
                                                           laplace=(run+1)*0.2)
 
                 lstm_model = torch.load(args.model_save_file +
@@ -113,45 +83,25 @@ def empirical_evaluation(args, metrics):
                 lstm_model.eval()
 
                 ngrams['LSTM'] = lstm_model
-
-                q = []
-                q.append(trie.root)
-                while q:
-                    p = []
-                    curr = q.pop(0)
-                    cnt = 0
-                    for ch in range(27):
-                        if curr.children[ch]:
-                            q.append(curr.children[ch])
-                            p.append(curr.children[ch].prob)
-                        else:
-                            cnt += 1
-                            p.append(0)
-                    if cnt < 27:
-                        e_dist = np.float32(p)
-                        context = curr.prefix
-
-                        for model, m in ngrams.items():
-                            if isinstance(m, utils.CharNGram):
-                                p_dist = m.get_distribution_from_context(
-                                    context).values()
-                                p_dist = np.float32(list(p_dist))
-                            else:
-                                p_dist = get_distribution_from_context(lstm_model,
-                                                                       context,
-                                                                       vectorizer)
-
-                # TODO append here by dividing by the total
-                res['model'].append(model)
-                res['dataset'].append(category[:-1])
-                res['prob'].append(prob)
-                res['run'].append(run)
-                for metric, func in metrics.items():
-                    res[metric].append(func(e_dist, p_dist))
-
+                
+                for model, m in ngrams.items():
+                    res['model'].append(model)
+                    res['dataset'].append(category[:-1])
+                    res['prob'].append(prob)
+                    res['run'].append(run)
+                    
+                    train_res = utils.eval_distributions(m, train_trie,
+                                                         vectorizer, metrics)
+                    for met, v in train_res.items():
+                        res["train_" + met].append(v)
+                    
+                    test_res = utils.eval_distributions(m, test_trie,
+                                                        vectorizer, metrics)
+                    for met, v in test_res.items():
+                        res["test_" + met].append(v)
     return res
 
-
+# %% Driver code
 metrics = {'KL': kl_divergence, 'cosine': cosine_distance,
            'sse': sse}
 
@@ -159,5 +109,19 @@ results = empirical_evaluation(args, metrics)
 
 results = pd.DataFrame(results)
 
-sns.catplot(x='model', y='KL', hue='prob', row='dataset', data=results,
-            kind='bar', palette='Reds')
+results.to_csv('backup_empirical_eval.csv', index=False, encoding='utf-8')
+
+#%%
+results = pd.read_csv('backup_empirical_eval.csv')
+
+for metric, name in zip(metrics.keys(), ['KL', 'cosine', 'euclidean']):
+    met = pd.melt(results, id_vars=['model', 'dataset', 'prob'],
+                       value_vars=['train_'+metric, 'test_'+metric],
+                       var_name='split', value_name=metric)
+    met['split'] = np.where(met.split == 'train_'+metric, 'train', 'test')
+    plt.figure()
+    g = sns.catplot(x='model', y=metric, hue='split', hue_order=['train', 'test'],
+                    row='dataset', col='prob', kind='bar',
+                    data=met, palette='Blues')
+    for ax in g.axes.flatten()[::2]:
+        ax.set_ylabel(name, fontsize=15)

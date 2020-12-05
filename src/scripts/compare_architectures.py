@@ -11,23 +11,16 @@ import os
 sys.path.append(os.path.abspath(".."))
 
 import utils
-import torch
 import math
-import torch.nn.functional as F
+import torch
+import torch.nn as nn
 import seaborn as sns
 import pandas as pd
-import collections
-import torch.nn as nn
 import numpy as np
+import matplotlib.pyplot as plt
 
 from argparse import Namespace
 from collections import defaultdict
-
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.linear_model import LogisticRegression
-from sklearn import metrics as mtr
-import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
 
 # %% Set-up paramenters
 args = Namespace(
@@ -47,55 +40,41 @@ args = Namespace(
 )
 
 # %% Helper
-def get_distribution_from_context(model, context, vectorizer, device='cpu',
-                                  softmax=True):
-    model.to(device)
-    hidden = model.initHidden(1, device)
 
-    for i, (f_v, t_v) in vectorizer.vectorize_single_char(context):
-        f_v = f_v.to(device)
-        out, hidden = model(f_v.unsqueeze(1), hidden)
-    dist = torch.flatten(out.detach())
-    # Take only valid continuations (letters + SOS)
-    dist = dist[:-2] + dist[-1]
+def cosine_distance(dist1, dist2):
+    return dist1.dot(dist2) / (np.linalg.norm(dist1) * np.linalg.norm(dist2))
 
-    if softmax:
-        dist = F.softmax(dist, dim=0)
-
-    return dist.numpy()
+def sse(dist1, dist2):
+    return np.square(dist2 - dist1).sum()
 
 def kl_divergence(dist1, dist2):
     pos = (dist1 != 0.) & (dist2 != 0.)
     return np.sum(dist1[pos] * (np.log2(dist1[pos]) - np.log2(dist2[pos])))
 
-def eval_distributions(model, trie, vectorizer, vocab_len=27):
-    total_kl = 0
-    total_eval = 0
-    q = [trie.root]
-    while q:
-        p = []
-        curr = q.pop(0)
-        cnt = 0
-        for ch in range(vocab_len):
-            if curr.children[ch]:
-                q.append(curr.children[ch])
-                p.append(curr.children[ch].prob)
-            else:
-                cnt += 1
-                p.append(0)
-        if cnt < vocab_len:
-            e_dist = np.float32(p)
-            context = curr.prefix
-            
-            p_dist = get_distribution_from_context(model, context, vectorizer)
-            
-            total_kl += kl_divergence(e_dist, p_dist)
-            
-            total_eval += 1
-    return total_kl / total_eval
-    
+def evaluate(model, loader, criterion):
+    running_loss = 0.
+    running_acc = 0.
+
+    model.eval()
+    for batch_id, batch_dict in enumerate(loader):
+        hidden = model.initHidden(args.batch_size, args.device)
+
+        out, hidden = model(batch_dict['X'], hidden)
+
+        loss = loss_func1(*utils.normalize_sizes(out, batch_dict['Y']))
+
+        running_loss += (loss.item() - running_loss) / (batch_id + 1)
+        acc_chars = utils.compute_accuracy(
+            out, batch_dict['Y'], vectorizer.data_vocab.PAD_idx
+        )
+        running_acc += (acc_chars - running_acc) / (batch_id + 1)
+    return running_loss, running_acc
+
 # %%
 res = defaultdict(list)
+
+metrics = {'KL': kl_divergence, 'cosine': cosine_distance,
+           'sse': sse}
 
 for data, category in zip(args.datafiles, args.modelfiles):
     for prob in [50, 99]:
@@ -110,16 +89,42 @@ for data, category in zip(args.datafiles, args.modelfiles):
         val_words = list(dataset.val_df.data)
 
         train_trie = utils.Trie()
-        train_trie.insert_many([list(w) + ['</s>'] for w in train_words])
+        train_trie.insert_many(train_words)
         
         val_trie = utils.Trie()
-        val_trie.insert_many([list(w) + ['</s>'] for w in val_words])
+        val_trie.insert_many(val_words)
+
+        ngrams = {}
+        for n in range(2, 5):
+            ngrams[f"{n}-gram"] = utils.CharNGram(data=train_words, n=n,
+                                                  laplace=1)
+        for name, m in ngrams.items():
+            res['dataset'].append(category[:-1])
+            res['prob'].append(end)
+            res['hidden'].append(name)
+            res['accuracy'].append(m.calculate_accuracy(train_words))
+            res['perplexity'].append(m.perplexity(train_words))
+            res['val_accuracy'].append(m.calculate_accuracy(val_words))
+            res['val_perplexity'].append(m.perplexity(val_words))
+            
+            train_res = utils.eval_distributions(m, train_trie,
+                                                 vectorizer, metrics)
+            
+            for met, v in train_res.items():
+                res["train_" + met].append(v)
+                
+            val_res = utils.eval_distributions(m, val_trie, vectorizer, metrics)
+        
+            for met, v in val_res.items():
+                res["val_" + met].append(v)
+            
 
         for hidden_units in args.hidden_dims:
             m_name = f"{category}_{hidden_units}_{end}"
 
             run = 0
             print(f"\n{data}: {m_name}_{run}\n")
+
             model = torch.load(args.model_save_file +
                                f"{m_name}/{m_name}_{run}" + ".pt")
 
@@ -128,61 +133,46 @@ for data, category in zip(args.datafiles, args.modelfiles):
 
             dataset.set_split('train')
             batch_generator = utils.generate_batches(dataset,
-                                                     batch_size=args.batch_size,
-                                                     device=args.device)
-            running_loss = 0.
-            running_acc = 0.
-
-            model.eval()
-            for batch_id, batch_dict in enumerate(batch_generator):
-                hidden = model.initHidden(args.batch_size, args.device)
-
-                out, hidden = model(batch_dict['X'], hidden)
-
-                loss = loss_func1(*utils.normalize_sizes(out, batch_dict['Y']))
-
-                running_loss += (loss.item() - running_loss) / (batch_id + 1)
-                acc_chars = utils.compute_accuracy(
-                    out, batch_dict['Y'], vectorizer.data_vocab.PAD_idx
-                )
-                running_acc += (acc_chars - running_acc) / (batch_id + 1)
+                                                      batch_size=args.batch_size,
+                                                      device=args.device)
 
             res['dataset'].append(category[:-1])
             res['prob'].append(end)
             res['hidden'].append(hidden_units)
-            res['loss'].append(running_loss)
-            res['accuracy'].append(running_acc)
-            res['perplexity'].append(math.exp(running_loss))
+            
+            loss, acc = evaluate(model, batch_generator, loss_func1)
+            
+            res['accuracy'].append(acc)
+            res['perplexity'].append(math.exp(loss))
 
             dataset.set_split('val')
             batch_generator = utils.generate_batches(dataset,
-                                                     batch_size=args.batch_size,
-                                                     device=args.device)
-            running_loss = 0.
-            running_acc = 0.
+                                                      batch_size=args.batch_size,
+                                                      device=args.device)
+            loss_func1 = nn.CrossEntropyLoss(
+                ignore_index=vectorizer.data_vocab.PAD_idx)
+            loss, acc = evaluate(model, batch_generator, loss_func1)
 
-            model.eval()
-            for batch_id, batch_dict in enumerate(batch_generator):
-                hidden = model.initHidden(args.batch_size, args.device)
+            # res['val_loss'].append(loss)
+            res['val_accuracy'].append(acc)
+            res['val_perplexity'].append(math.exp(loss))
 
-                out, hidden = model(batch_dict['X'], hidden)
-
-                loss = loss_func1(*utils.normalize_sizes(out, batch_dict['Y']))
-
-                running_loss += (loss.item() - running_loss) / (batch_id + 1)
-                acc_chars = utils.compute_accuracy(
-                    out, batch_dict['Y'], vectorizer.data_vocab.PAD_idx
-                )
-                running_acc += (acc_chars - running_acc) / (batch_id + 1)
-
-            res['val_loss'].append(running_loss)
-            res['val_accuracy'].append(running_acc)
-            res['val_perplexity'].append(math.exp(running_loss))
-            res['KL'].append(eval_distributions(model, train_trie, vectorizer))
-            res['val_KL'].append(eval_distributions(model, val_trie,
-                                                    vectorizer))
+            train_res = utils.eval_distributions(model, train_trie, vectorizer, metrics)
+            
+            for met, v in train_res.items():
+                res["train_" + met].append(v)
+            
+            val_res = utils.eval_distributions(model, val_trie, vectorizer, metrics)
+            
+            for met, v in val_res.items():
+                res["val_" + met].append(v)
 
 results = pd.DataFrame(res)
+
+results.to_csv('backup_compare_architectures.csv', index=False, encoding='utf-8')
+
+# %%
+results = pd.read_csv('backup_compare_architectures.csv')
 
 results_acc = pd.melt(results, id_vars=['dataset', 'prob', 'hidden'],
                       value_vars=['accuracy', 'val_accuracy'],
@@ -194,22 +184,21 @@ g = sns.catplot(x='hidden', y='ACC', hue='split', hue_order=['train', 'val'],
                 row='dataset', col='prob', kind='bar',
                 data=results_acc, palette='Reds')
 
-
 results_loss = pd.melt(results, id_vars=['dataset', 'prob', 'hidden'],
-                       value_vars=['loss', 'val_loss'],
-                       var_name='split', value_name='LOSS')
-results_loss['split'] = np.where(results_loss.split == 'loss', 'train', 'val')
+                        value_vars=['perplexity', 'val_perplexity'],
+                        var_name='split', value_name='Perplexity')
+results_loss['split'] = np.where(results_loss.split == 'perplexity', 'train', 'val')
 
-g = sns.catplot(x='hidden', y='LOSS', hue='split', hue_order=['train', 'val'],
+g = sns.catplot(x='hidden', y='Perplexity', hue='split', hue_order=['train', 'val'],
                 row='dataset', col='prob', kind='bar',
                 data=results_loss, palette='Reds')
 
-
-results_kl = pd.melt(results, id_vars=['dataset', 'prob', 'hidden'],
-                       value_vars=['KL', 'val_KL'],
-                       var_name='split', value_name='kl')
-results_kl['split'] = np.where(results_kl.split == 'KL', 'train', 'val')
-
-g = sns.catplot(x='hidden', y='kl', hue='split', hue_order=['train', 'val'],
-                row='dataset', col='prob', kind='bar',
-                data=results_kl, palette='Reds')
+for metric in metrics.keys():
+    met = pd.melt(results, id_vars=['hidden', 'dataset', 'prob'],
+                        value_vars=['train_'+metric, 'val_'+metric],
+                        var_name='split', value_name=metric)
+    met['split'] = np.where(met.split == 'train_'+metric, 'train', 'val')
+    plt.figure()
+    g = sns.catplot(x='hidden', y=metric, hue='split', hue_order=['train', 'val'],
+                    row='dataset', col='prob', kind='bar',
+                    data=met, palette='Reds')

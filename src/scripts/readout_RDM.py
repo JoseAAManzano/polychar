@@ -4,6 +4,11 @@ Created on Thu Nov  5 09:11:19 2020
 
 @author: josea
 """
+import sys
+import os
+
+sys.path.append(os.path.abspath(".."))
+
 import utils
 import torch
 import math
@@ -28,10 +33,10 @@ import numpy as np
 
 
 args = Namespace(
-    csv='../processed_data/',
-    model_checkpoint_file='/models/checkpoints/',
-    save_file='hidden/',
-    model_save_file='models/',
+    csv='../../processed_data/',
+    model_checkpoint_file='../models/checkpoints/',
+    save_file='../hidden/',
+    model_save_file='../models/',
     datafiles=['ESP-ENG.csv', 'ESP-EUS.csv'],
     modelfiles=['ESEN_', 'ESEU_'],
     probs=[1, 20, 40, 50, 60, 80, 99],
@@ -43,35 +48,57 @@ args = Namespace(
     seed=404
 )
 
-
 hidd_cols = [str(i) for i in range(args.hidden_dim)]
 
 for data, category in zip(args.datafiles, args.modelfiles):
-    for prob in [50, 99]:
+    for prob in [50, 100]:
         end = f"{prob:02}-{100-prob:02}"
         m_name = f"{category}{end}"
 
         dataset = pd.DataFrame()
-        for run in range(args.n_runs):
-            tmp = pd.read_json(f"{args.save_file}/{m_name}_{run}.json",
-                               encoding='utf-8')
-            dataset = pd.concat([dataset, tmp], axis=0, ignore_index=True)
+        run = 0
+        tmp = pd.read_json(f"{args.save_file}/test_hidden_{m_name}_{run}.json",
+                           encoding='utf-8')
+        dataset = pd.concat([dataset, tmp], axis=0, ignore_index=True)
 
         dataset['len'] = dataset.word.map(len)
 
-        rdm_data = dataset[(dataset.char == 6) & (dataset.run == 1)]
+        rdm_data = dataset[(dataset.char == 6)]
         rdm_data = rdm_data.sort_values(by='label')
         ticks = list(rdm_data.label)
 
         rdm_data = np.array(rdm_data[hidd_cols].values)
         rdm_data = (rdm_data - rdm_data.mean()) / rdm_data.std()
 
-        RDM = distance.squareform(distance.pdist(rdm_data, 'euclidean'))
-        RDM = (RDM - RDM.min()) / (RDM.max() - RDM.min())
+        RDM = distance.squareform(distance.pdist(rdm_data, 'cosine'))
 
         plt.figure()
         plt.imshow(RDM, cmap='coolwarm')
         plt.axis('off')
-        plt.title(f"MinMax euclidean distance {m_name}_{0}_5")
+        plt.title(f"Cosine distance {m_name}_{0}_5")
         plt.colorbar()
         plt.show()
+
+
+
+from sklearn.preprocessing import StandardScaler
+
+tmp = pd.read_json("../hidden/val_hidden_ESEN_50-50_1.json",
+                           encoding='utf-8')
+
+tmp['len'] = tmp.word.map(len)
+
+rdm_data = tmp[tmp.char == 6]
+rdm_data = rdm_data.sort_values(by=['label', 'len'])
+
+ticks = list(rdm_data.label)
+
+data = np.array(rdm_data[hidd_cols].values)
+
+data = StandardScaler().fit_transform(data)
+
+rdm = distance.squareform(distance.pdist(data, 'cosine'))
+
+plt.imshow(rdm, cmap='coolwarm')
+plt.axis('off')
+plt.colorbar()

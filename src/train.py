@@ -28,7 +28,7 @@ args = Namespace(
     learning_rate=0.001,
     batch_size=64,
     datafiles=['ESP-ENG.csv', 'ESP-EUS.csv'],
-    modelfiles=['ESEN_', 'ESEU_'],
+    modelfiles=['ESEN', 'ESEU'],
     probs=[1, 20, 40, 50, 60, 80, 99],
     n_runs=5,
     plotting=False,
@@ -37,8 +37,6 @@ args = Namespace(
 )
 
 utils.set_all_seeds(args.seed, args.device)
-
-print(args.device)
 
 for data, category in zip(args.datafiles, args.modelfiles):
     for prob in args.probs:
@@ -49,10 +47,11 @@ for data, category in zip(args.datafiles, args.modelfiles):
 
         # %% Set-up dataset, vectorizer, and model
         dataset = utils.TextDataset.make_text_dataset(df, vectorizer,
-                                                      p=prob/100, seed=args.seed)
+                                                      p=prob/100,
+                                                      seed=args.seed)
 
         for run in range(args.n_runs):
-            m_name = f"{category}{end}"
+            m_name = f"{category}_{end}"
 
             print(f"\n{data}: {m_name}_{run}\n")
 
