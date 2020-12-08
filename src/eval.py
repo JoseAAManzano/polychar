@@ -34,7 +34,7 @@ args = Namespace(
     model_save_file='models/',
     datafiles=['ESP-ENG.csv', 'ESP-EUS.csv'],
     modelfiles=['ESEN_', 'ESEU_'],
-    probs=[1, 20, 40, 50, 60, 80, 99],
+    probs=[50, 99],
     n_runs=5,
     hidden_dim=128,
     batch_size=256,
@@ -520,9 +520,9 @@ for dtst in ['ESEN', 'ESEU']:
 
 g = sns.catplot(x='char', y='cel_ROC_AUC', hue='prob', row='dataset',
                 data=readout, kind='point', palette='Blues', ci='sd')
-g.axes.flatten()[0].fill([1.5, 6.5, 6.5, 1.5], [0.5,0.5,1,1], 'k', alpha=0.2)
+g.axes.flatten()[0].fill([2.5, 7.5, 7.5, 2.5], [0.5,0.5,1,1], 'k', alpha=0.2)
 g.axes.flatten()[0].set_ylabel('ROC_AUC', fontsize=15)
-g.axes.flatten()[1].fill([2.5, 8.5, 8.5, 2.5], [0.5,0.5,1,1], 'k', alpha=0.2)
+g.axes.flatten()[1].fill([2.5, 9.1, 9.1, 2.5], [0.5,0.5,1,1], 'k', alpha=0.2)
 g.axes.flatten()[1].set_ylabel('ROC_AUC', fontsize=15)
 
 pivot = readout.pivot_table(index=['dataset', 'run', 'char'],
@@ -538,10 +538,9 @@ for dtst in ['ESEN', 'ESEU']:
 g = sns.catplot(x='char', y='cel_F1', hue='prob', row='dataset',
                 data=readout, kind='point', palette='Blues', ci='sd')
 g.set(ylim=(0.5, 1))
-g.axes.flatten()[0].fill([2.5, 3.5, 3.5, 2.5], [0.5,0.5,1,1], 'k', alpha=0.2)
-g.axes.flatten()[0].fill([4.5, 7.5, 7.5, 4.5], [0.5,0.5,1,1], 'k', alpha=0.2)
+g.axes.flatten()[0].fill([2.5, 7.5, 7.5, 2.5], [0.5,0.5,1,1], 'k', alpha=0.2)
 g.axes.flatten()[0].set_ylabel('F1', fontsize=15)
-g.axes.flatten()[1].fill([2.5, 8.5, 8.5, 2.5], [0.5,0.5,1,1], 'k', alpha=0.2)
+g.axes.flatten()[1].fill([2.5, 9.1, 9.1, 2.5], [0.5,0.5,1,1], 'k', alpha=0.2)
 g.axes.flatten()[1].set_ylabel('F1', fontsize=15)
 
 # %% Clustering of hidden representations
@@ -640,7 +639,7 @@ for data, category in zip(args.datafiles, args.modelfiles):
                 lstm_model.parameters(),
                 lr=0.001)
             
-            # for _ in range(2):
+            # for _ in range(1):
             #     eval_words = eval_words.sample(frac=1)
                 
             #     for word, lab in zip(eval_words.data, eval_words.label):
@@ -698,5 +697,5 @@ sns.set(style='whitegrid')
 
 g = sns.catplot(x='block', y='acc', hue='Group', hue_order=['MONO','ES-EN','ES-EU'],
                 col='label', col_order=['ES-', 'ES+'],
-                data=res, kind='point', ci=None)
+                data=res, kind='point', ci=99)
 g.set(ylim=(0, 100))

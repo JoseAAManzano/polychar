@@ -66,6 +66,7 @@ def make_train_state():
         'epoch_idx': 0,
         'early_stopping_step': 0,
         'early_stopping_best_val': 1e10,
+        'early_stopping_best_acc': 0,
         'train_loss': [],
         'train_acc': [],
         'val_loss': [],
@@ -1002,12 +1003,12 @@ class Trie(object):
             curr.prefix = context + [c]
             curr.cnt += 1
         
-        # if not curr.children[self.vocab_len-1]:
-        #     curr.children[self.vocab_len-1] = TrieNode(vocab_len=self.vocab_len)
-        # context = curr.prefix
-        # curr = curr.children[self.vocab_len-1]
-        # curr.context = context + [self.EOS]
-        # curr.cnt += 1
+        if not curr.children[self.vocab_len-1]:
+            curr.children[self.vocab_len-1] = TrieNode(vocab_len=self.vocab_len)
+        context = curr.prefix
+        curr = curr.children[self.vocab_len-1]
+        curr.context = context + [self.EOS]
+        curr.cnt += 1
         
         curr.finished = True
 
@@ -1083,5 +1084,5 @@ class Trie(object):
                 else:
                     cnt += 1
                     p.append(0)
-            if cnt < self.vocab_len:
+            if 0 < cnt < self.vocab_len:
                 print(f"Context: {curr.prefix}, prob: {p}")

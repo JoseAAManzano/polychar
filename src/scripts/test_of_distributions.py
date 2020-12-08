@@ -30,12 +30,13 @@ args = Namespace(
     device=torch.device('cpu'),
     seed=404
 )
+
+
 # %%
-df = pd.read_csv(args.csv + 'ESP-ENG.csv')
-vectorizer = utils.Vectorizer.from_df(df)
 dataset = utils.TextDataset.load_dataset_and_make_vectorizer(
     args.csv + 'ESP-ENG.csv',
     p=50/100, seed=args.seed)
+vectorizer = dataset.get_vectorizer()
 
 model = torch.load(args.model_save_file + 'ESEN_50-50/ESEN_50-50_0.pt')
 model.eval()

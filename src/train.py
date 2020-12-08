@@ -24,12 +24,12 @@ args = Namespace(
     n_lstm_layers=1,
     drop_p=0.1,
     n_epochs=100,
-    early_stopping_patience=5,
+    early_stopping_patience=10,
     learning_rate=0.001,
     batch_size=64,
     datafiles=['ESP-ENG.csv', 'ESP-EUS.csv'],
     modelfiles=['ESEN', 'ESEU'],
-    probs=[1, 20, 40, 50, 60, 80, 99],
+    probs=[50, 100],
     n_runs=5,
     plotting=False,
     device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu'),
@@ -49,7 +49,6 @@ for data, category in zip(args.datafiles, args.modelfiles):
         dataset = utils.TextDataset.make_text_dataset(df, vectorizer,
                                                       p=prob/100,
                                                       seed=args.seed)
-
         for run in range(args.n_runs):
             m_name = f"{category}_{end}"
 
@@ -97,7 +96,7 @@ for data, category in zip(args.datafiles, args.modelfiles):
                         *utils.normalize_sizes(out, batch_dict['Y']))
 
                     loss.backward()
-                    nn.utils.clip_grad_norm_(model.parameters(), 5)
+                    # nn.utils.clip_grad_norm_(model.parameters(), 5)
                     optimizer.step()
 
                     # Update train_state arguments
@@ -157,6 +156,7 @@ for data, category in zip(args.datafiles, args.modelfiles):
                             torch.save(model, args.model_save_file +
                                        f"{m_name}/{m_name}_{run}" + ".pt")
                             train_state['early_stopping_best_val'] = loss_t
+                            train_state['early_stopping_best_acc'] = train_state["val_acc"][-1]
                         train_state['early_stopping_step'] = 0
 
                 if train_state['early_stopping_step'] >= args.early_stopping_patience:
